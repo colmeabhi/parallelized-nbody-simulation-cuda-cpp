@@ -1,18 +1,29 @@
 #!/usr/bin/env bash
 # ─── Quick single-command build (no CMake required) ──────────────────────────
-# Adjust -arch to match your GPU.  Run `nvidia-smi` to find your architecture:
-#   SM 6.x  →  -arch=sm_60  (Pascal,  GTX 10xx)
-#   SM 7.0  →  -arch=sm_70  (Volta,   V100)
-#   SM 7.5  →  -arch=sm_75  (Turing,  RTX 20xx)
-#   SM 8.0  →  -arch=sm_80  (Ampere,  A100 / RTX 30xx)
-#   SM 8.6  →  -arch=sm_86  (Ampere,  RTX 3070-3090)
-#   SM 8.9  →  -arch=sm_89  (Ada,     RTX 40xx)
+# By default this script auto-detects your GPU's SM version via nvidia-smi.
+# You can also pass the arch explicitly:  ./build.sh sm_75
 # ─────────────────────────────────────────────────────────────────────────────
 set -e
 
-ARCH=${1:-sm_86}    # pass your arch as first arg, e.g.: ./build.sh sm_75
+# ── Auto-detect GPU architecture ─────────────────────────────────────────────
+if [ -n "$1" ]; then
+    ARCH="$1"
+else
+    # nvidia-smi --query-gpu=compute_cap returns e.g. "7.5" for a T4
+    RAW=$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null \
+          | head -1 | tr -d ' \r')
+    if [ -n "$RAW" ]; then
+        # "7.5" → "sm_75"
+        ARCH="sm_$(echo "$RAW" | tr -d '.')"
+        echo "Detected GPU compute capability: $RAW  →  $ARCH"
+    else
+        ARCH="sm_75"   # safe fallback (Turing / T4)
+        echo "Could not detect GPU — defaulting to $ARCH"
+    fi
+fi
 
-echo "Building for architecture: $ARCH"
+# ── Compile ───────────────────────────────────────────────────────────────────
+echo "Compiling for architecture: $ARCH"
 
 nvcc -O3 --use_fast_math -std=c++14 \
      -arch="$ARCH"                  \
@@ -22,6 +33,7 @@ nvcc -O3 --use_fast_math -std=c++14 \
      src/nbody_kernel.cu            \
      -o galaxy_nbody
 
-echo "Done → ./galaxy_nbody"
+echo ""
+echo "Build successful → ./galaxy_nbody"
 echo "Run  → ./galaxy_nbody [n_bodies] [n_steps]"
-echo "Plot → python3 visualize.py simulation.bin"
+echo "Plot → python3 visualize.py simulation.bin [out.gif]"

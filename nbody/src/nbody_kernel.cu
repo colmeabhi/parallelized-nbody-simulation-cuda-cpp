@@ -19,11 +19,15 @@
 #include <cstdlib>
 
 // ─── Error-checking helper ───────────────────────────────────────────────────
+// IMPORTANT: capture `err` in a local variable so the expression is evaluated
+// exactly once.  Writing CUDA_CHECK(cudaGetLastError()) without this would call
+// cudaGetLastError() a second time inside the macro (already cleared → "no error").
 #define CUDA_CHECK(err)                                                    \
     do {                                                                   \
-        if ((err) != cudaSuccess) {                                        \
+        cudaError_t _e = (err);                                            \
+        if (_e != cudaSuccess) {                                           \
             fprintf(stderr, "CUDA error at %s:%d — %s\n",                 \
-                    __FILE__, __LINE__, cudaGetErrorString(err));           \
+                    __FILE__, __LINE__, cudaGetErrorString(_e));            \
             exit(EXIT_FAILURE);                                            \
         }                                                                  \
     } while (0)
