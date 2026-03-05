@@ -1,0 +1,56 @@
+# ── Build artifacts ───────────────────────────────────────────────────────────
+build/
+*.o
+*.obj
+*.slo
+*.lo
+*.d
+*.gch
+*.pch
+*.ilk
+*.pdb
+*.dwo
+
+# Compiled libraries
+*.so
+*.dylib
+*.dll
+*.lai
+*.la
+*.a
+*.lib
+
+# Executables
+*.exe
+*.out
+*.app
+galaxy_nbody
+
+# ── Simulation output ────────────────────────────────────────────────────────
+*.bin
+*.gif
+
+# ── Python ────────────────────────────────────────────────────────────────────
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# ── IDE / OS ──────────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# editor
+.vscode/
+.DS_Store
+
+# ── Benchmark binaries / profiler reports ────────────────────────────────────
+nbody_bench_cpu
+nbody_bench_gpu
+nbody/energy.csv
+*.ncu-rep

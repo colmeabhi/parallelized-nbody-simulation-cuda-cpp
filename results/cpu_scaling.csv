@@ -1,0 +1,9 @@
+impl,integrator,n,block,threads,steps,ms_per_step,interactions_per_s,gflops,energy_drift,force_rel_err
+cpu_serial,kdk,1024,0,1,50,0.376932,2.781870e+09,55.6374,nan,nan
+cpu_openmp,kdk,1024,0,8,50,0.080653,1.300102e+10,260.0205,nan,nan
+cpu_serial,kdk,4096,0,1,50,5.815441,2.884943e+09,57.6989,nan,nan
+cpu_openmp,kdk,4096,0,8,50,0.826100,2.030894e+10,406.1788,nan,nan
+cpu_serial,kdk,16384,0,1,8,92.381308,2.905733e+09,58.1147,nan,nan
+cpu_openmp,kdk,16384,0,8,8,12.027427,2.231861e+10,446.3722,nan,nan
+cpu_serial,kdk,65536,0,1,2,1493.348864,2.876064e+09,57.5213,nan,nan
+cpu_openmp,kdk,65536,0,8,2,189.460089,2.266951e+10,453.3902,nan,nan
