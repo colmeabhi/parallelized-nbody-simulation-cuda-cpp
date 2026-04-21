@@ -1,32 +1,20 @@
-# Prerequisites
-*.d
-
-# Compiled Object files
-*.slo
-*.lo
+# ── Build artifacts ───────────────────────────────────────────────────────────
+build/
 *.o
 *.obj
-
-# Precompiled Headers
+*.slo
+*.lo
+*.d
 *.gch
 *.pch
-
-# Linker files
 *.ilk
-
-# Debugger Files
 *.pdb
+*.dwo
 
-# Compiled Dynamic libraries
+# Compiled libraries
 *.so
 *.dylib
 *.dll
-
-# Fortran module files
-*.mod
-*.smod
-
-# Compiled Static libraries
 *.lai
 *.la
 *.a
@@ -36,6 +24,23 @@
 *.exe
 *.out
 *.app
+galaxy_nbody
 
-# debug information files
-*.dwo
+# ── Simulation output ────────────────────────────────────────────────────────
+*.bin
+*.gif
+
+# ── Python ────────────────────────────────────────────────────────────────────
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# ── IDE / OS ──────────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
