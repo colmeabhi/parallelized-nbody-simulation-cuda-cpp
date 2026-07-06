@@ -3,8 +3,8 @@
 visualize.py  —  Animate the galaxy N-body simulation output.
 
 Usage:
-    python3 visualize.py simulation.bin           # live animation
-    python3 visualize.py simulation.bin out.gif   # save to GIF
+    python3 plots/visualize.py simulation.bin           # live animation
+    python3 plots/visualize.py simulation.bin out.gif   # save to GIF
 
 Requires: numpy, matplotlib
     pip install numpy matplotlib
@@ -20,7 +20,7 @@ import matplotlib.animation as animation
 # ─── Load binary simulation file ─────────────────────────────────────────────
 def load(path: str):
     """
-    Binary format written by GalaxySimulation::run():
+    Binary format written by src/main.cu:
         Header : int n_bodies, int n_snapshots   (8 bytes)
         Frames : for each snapshot:
                    n_bodies × (float x, float y, float z)  (12 bytes/body)
