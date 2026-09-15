@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 400" width="900" height="400" font-family="'Virgil','Segoe Print','Bradley Hand','Comic Sans MS','Chalkboard SE','Marker Felt',cursive">
+<defs>
+<filter id="rough" filterUnits="userSpaceOnUse" x="0" y="0" width="900" height="400"><feTurbulence type="fractalNoise" baseFrequency="0.035" numOctaves="2" seed="4" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="3.2"/></filter>
+<marker id="arr" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="9" markerHeight="9" orient="auto-start-reverse"><path d="M1 1 L11 6 L1 11" fill="none" stroke="#1e1e1e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></marker>
+<marker id="arrr" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="9" markerHeight="9" orient="auto-start-reverse"><path d="M1 1 L11 6 L1 11" fill="none" stroke="#e03131" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></marker>
+<style>.sk{filter:url(#rough)}</style>
+</defs>
+<rect x="1" y="1" width="898" height="398" rx="14" fill="#ffffff" stroke="#dee2e6"/>
+<text x="450" y="42" font-size="26" text-anchor="middle" font-weight="bold" fill="#1e1e1e">Two ways to take one time step</text>
+<text x="40" y="100" font-size="22" text-anchor="start" font-weight="bold" fill="#1e1e1e">Euler</text>
+<text x="40" y="124" font-size="15" text-anchor="start" font-weight="normal" fill="#495057">simple</text>
+<rect class="sk" x="150" y="78" width="180" height="62" rx="10" fill="#a5d8ff" stroke="#1e1e1e" stroke-width="2"/>
+<text x="240.0" y="104.5" font-size="15" text-anchor="middle" font-weight="bold" fill="#1e1e1e">gravity</text>
+<text x="240.0" y="124.0" font-size="15" text-anchor="middle" font-weight="normal" fill="#1e1e1e">acc = pull at pos</text>
+<rect class="sk" x="365" y="78" width="180" height="62" rx="10" fill="#b2f2bb" stroke="#1e1e1e" stroke-width="2"/>
+<text x="455.0" y="104.5" font-size="15" text-anchor="middle" font-weight="bold" fill="#1e1e1e">kick (full)</text>
+<text x="455.0" y="124.0" font-size="15" text-anchor="middle" font-weight="normal" fill="#1e1e1e">vel += acc * dt</text>
+<line class="sk" x1="334" y1="109" x2="361" y2="109" stroke="#1e1e1e" stroke-width="2" stroke-linecap="round" marker-end="url(#arr)"/>
+<rect class="sk" x="580" y="78" width="180" height="62" rx="10" fill="#b2f2bb" stroke="#1e1e1e" stroke-width="2"/>
+<text x="670.0" y="104.5" font-size="15" text-anchor="middle" font-weight="bold" fill="#1e1e1e">drift (full)</text>
+<text x="670.0" y="124.0" font-size="15" text-anchor="middle" font-weight="normal" fill="#1e1e1e">pos += vel * dt</text>
+<line class="sk" x1="549" y1="109" x2="576" y2="109" stroke="#1e1e1e" stroke-width="2" stroke-linecap="round" marker-end="url(#arr)"/>
+<text x="40" y="228" font-size="22" text-anchor="start" font-weight="bold" fill="#1e1e1e">KDK</text>
+<text x="40" y="252" font-size="15" text-anchor="start" font-weight="normal" fill="#495057">leapfrog</text>
+<rect class="sk" x="150" y="205" width="162" height="62" rx="10" fill="#ffec99" stroke="#1e1e1e" stroke-width="2"/>
+<text x="231.0" y="231.8" font-size="14" text-anchor="middle" font-weight="bold" fill="#1e1e1e">kick (half)</text>
+<text x="231.0" y="250.0" font-size="14" text-anchor="middle" font-weight="normal" fill="#1e1e1e">vel += acc * dt/2</text>
+<rect class="sk" x="335" y="205" width="162" height="62" rx="10" fill="#b2f2bb" stroke="#1e1e1e" stroke-width="2"/>
+<text x="416.0" y="231.8" font-size="14" text-anchor="middle" font-weight="bold" fill="#1e1e1e">drift (full)</text>
+<text x="416.0" y="250.0" font-size="14" text-anchor="middle" font-weight="normal" fill="#1e1e1e">pos += vel * dt</text>
+<line class="sk" x1="314" y1="236" x2="331" y2="236" stroke="#1e1e1e" stroke-width="2" stroke-linecap="round" marker-end="url(#arr)"/>
+<rect class="sk" x="520" y="205" width="162" height="62" rx="10" fill="#a5d8ff" stroke="#1e1e1e" stroke-width="2"/>
+<text x="601.0" y="231.8" font-size="14" text-anchor="middle" font-weight="bold" fill="#1e1e1e">gravity</text>
+<text x="601.0" y="250.0" font-size="14" text-anchor="middle" font-weight="normal" fill="#1e1e1e">acc = pull at new pos</text>
+<line class="sk" x1="499" y1="236" x2="516" y2="236" stroke="#1e1e1e" stroke-width="2" stroke-linecap="round" marker-end="url(#arr)"/>
+<rect class="sk" x="705" y="205" width="162" height="62" rx="10" fill="#ffec99" stroke="#1e1e1e" stroke-width="2"/>
+<text x="786.0" y="231.8" font-size="14" text-anchor="middle" font-weight="bold" fill="#1e1e1e">kick (half)</text>
+<text x="786.0" y="250.0" font-size="14" text-anchor="middle" font-weight="normal" fill="#1e1e1e">vel += acc * dt/2</text>
+<line class="sk" x1="684" y1="236" x2="701" y2="236" stroke="#1e1e1e" stroke-width="2" stroke-linecap="round" marker-end="url(#arr)"/>
+<rect class="sk" x="60" y="305" width="370" height="70" rx="10" fill="#e9ecef" stroke="#1e1e1e" stroke-width="2"/>
+<text x="245.0" y="335.20000000000005" font-size="16" text-anchor="middle" font-weight="bold" fill="#1e1e1e">same cost:</text>
+<text x="245.0" y="356.00000000000006" font-size="16" text-anchor="middle" font-weight="normal" fill="#1e1e1e">one gravity calculation per step</text>
+<rect class="sk" x="470" y="305" width="370" height="70" rx="10" fill="#d0bfff" stroke="#1e1e1e" stroke-width="2"/>
+<text x="655.0" y="335.20000000000005" font-size="16" text-anchor="middle" font-weight="bold" fill="#1e1e1e">KDK is more accurate:</text>
+<text x="655.0" y="356.00000000000006" font-size="16" text-anchor="middle" font-weight="normal" fill="#1e1e1e">10x smaller energy error (dt = 0.0025)</text>
+</svg>

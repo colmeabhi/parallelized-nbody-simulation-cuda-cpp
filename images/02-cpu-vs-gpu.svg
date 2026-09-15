@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 400" width="900" height="400" font-family="'Virgil','Segoe Print','Bradley Hand','Comic Sans MS','Chalkboard SE','Marker Felt',cursive">
+<defs>
+<filter id="rough" filterUnits="userSpaceOnUse" x="0" y="0" width="900" height="400"><feTurbulence type="fractalNoise" baseFrequency="0.035" numOctaves="2" seed="4" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="3.2"/></filter>
+<marker id="arr" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="9" markerHeight="9" orient="auto-start-reverse"><path d="M1 1 L11 6 L1 11" fill="none" stroke="#1e1e1e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></marker>
+<marker id="arrr" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="9" markerHeight="9" orient="auto-start-reverse"><path d="M1 1 L11 6 L1 11" fill="none" stroke="#e03131" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></marker>
+<style>.sk{filter:url(#rough)}</style>
+</defs>
+<rect x="1" y="1" width="898" height="398" rx="14" fill="#ffffff" stroke="#dee2e6"/>
+<text x="450" y="44" font-size="26" text-anchor="middle" font-weight="bold" fill="#1e1e1e">The idea: give every star its own GPU thread</text>
+<rect class="sk" x="40" y="75" width="390" height="250" rx="10" fill="#f8f9fa" stroke="#1e1e1e" stroke-width="2" stroke-dasharray="8 6"/>
+<text x="235" y="105" font-size="20" text-anchor="middle" font-weight="bold" fill="#1e1e1e">CPU, 1 thread</text>
+<rect class="sk" x="70" y="170" width="110" height="60" rx="10" fill="#ffd8a8" stroke="#1e1e1e" stroke-width="2"/>
+<text x="125.0" y="205.95" font-size="17" text-anchor="middle" font-weight="normal" fill="#1e1e1e">1 worker</text>
+<rect class="sk" x="215" y="180" width="40" height="40" rx="10" fill="#a5d8ff" stroke="#1e1e1e" stroke-width="2"/>
+<text x="235.0" y="205.6" font-size="16" text-anchor="middle" font-weight="normal" fill="#1e1e1e">1</text>
+<rect class="sk" x="265" y="180" width="40" height="40" rx="10" fill="#a5d8ff" stroke="#1e1e1e" stroke-width="2"/>
+<text x="285.0" y="205.6" font-size="16" text-anchor="middle" font-weight="normal" fill="#1e1e1e">2</text>
+<rect class="sk" x="315" y="180" width="40" height="40" rx="10" fill="#a5d8ff" stroke="#1e1e1e" stroke-width="2"/>
+<text x="335.0" y="205.6" font-size="16" text-anchor="middle" font-weight="normal" fill="#1e1e1e">3</text>
+<rect class="sk" x="365" y="180" width="40" height="40" rx="10" fill="#a5d8ff" stroke="#1e1e1e" stroke-width="2"/>
+<text x="385.0" y="205.6" font-size="16" text-anchor="middle" font-weight="normal" fill="#1e1e1e">...</text>
+<line class="sk" x1="184" y1="200" x2="211" y2="200" stroke="#1e1e1e" stroke-width="2" stroke-linecap="round" marker-end="url(#arr)"/>
+<text x="235" y="270" font-size="18" text-anchor="middle" font-weight="normal" fill="#1e1e1e">one star after another</text>
+<text x="235" y="296" font-size="15" text-anchor="middle" font-weight="normal" fill="#495057">(OpenMP: one worker per CPU core)</text>
+<rect class="sk" x="470" y="75" width="390" height="250" rx="10" fill="#f8f9fa" stroke="#1e1e1e" stroke-width="2" stroke-dasharray="8 6"/>
+<text x="665" y="105" font-size="20" text-anchor="middle" font-weight="bold" fill="#1e1e1e">GPU</text>
+<rect class="sk" x="500" y="125" width="28" height="24" rx="10" fill="#b2f2bb" stroke="#1e1e1e" stroke-width="2"/>
+<rect class="sk" x="537" y="125" width="28" height="24" rx="10" fill="#b2f2bb" stroke="#1e1e1e" stroke-width="2"/>
+<rect class="sk" x="574" y="125" width="28" height="24" rx="10" fill="#b2f2bb" stroke="#1e1e1e" stroke-width="2"/>
+<rect class="sk" x="611" y="125" width="28" height="24" rx="10" fill="#b2f2bb" stroke="#1e1e1e" stroke-width="2"/>
+<rect class="sk" x="648" y="125" width="28" height="24" rx="10" fill="#b2f2bb" stroke="#1e1e1e" stroke-width="2"/>
+<rect class="sk" x="685" y="125" width="28" height="24" rx="10" fill="#b2f2bb" stroke="#1e1e1e" stroke-width="2"/>
+<rect class="sk" x="722" y="125" width="28" height="24" rx="10" fill="#b2f2bb" stroke="#1e1e1e" stroke-width="2"/>
+<rect class="sk" x="759" y="125" width="28" height="24" rx="10" fill="#b2f2bb" stroke="#1e1e1e" stroke-width="2"/>
+<rect class="sk" x="796" y="125" width="28" height="24" rx="10" fill="#b2f2bb" stroke="#1e1e1e" stroke-width="2"/>
+<rect class="sk" x="500" y="158" width="28" height="24" rx="10" fill="#b2f2bb" stroke="#1e1e1e" stroke-width="2"/>
+<rect class="sk" x="537" y="158" width="28" height="24" rx="10" fill="#b2f2bb" stroke="#1e1e1e" stroke-width="2"/>
+<rect class="sk" x="574" y="158" width="28" height="24" rx="10" fill="#b2f2bb" stroke="#1e1e1e" stroke-width="2"/>
+<rect class="sk" x="611" y="158" width="28" height="24" rx="10" fill="#b2f2bb" stroke="#1e1e1e" stroke-width="2"/>
+<rect class="sk" x="648" y="158" width="28" height="24" rx="10" fill="#b2f2bb" stroke="#1e1e1e" stroke-width="2"/>
+<rect class="sk" x="685" y="158" width="28" height="24" rx="10" fill="#b2f2bb" stroke="#1e1e1e" stroke-width="2"/>
+<rect class="sk" x="722" y="158" width="28" height="24" rx="10" fill="#b2f2bb" stroke="#1e1e1e" stroke-width="2"/>
+<rect class="sk" x="759" y="158" width="28" height="24" rx="10" fill="#b2f2bb" stroke="#1e1e1e" stroke-width="2"/>
+<rect class="sk" x="796" y="158" width="28" height="24" rx="10" fill="#b2f2bb" stroke="#1e1e1e" stroke-width="2"/>
+<rect class="sk" x="500" y="191" width="28" height="24" rx="10" fill="#b2f2bb" stroke="#1e1e1e" stroke-width="2"/>
+<rect class="sk" x="537" y="191" width="28" height="24" rx="10" fill="#b2f2bb" stroke="#1e1e1e" stroke-width="2"/>
+<rect class="sk" x="574" y="191" width="28" height="24" rx="10" fill="#b2f2bb" stroke="#1e1e1e" stroke-width="2"/>
+<rect class="sk" x="611" y="191" width="28" height="24" rx="10" fill="#b2f2bb" stroke="#1e1e1e" stroke-width="2"/>
+<rect class="sk" x="648" y="191" width="28" height="24" rx="10" fill="#b2f2bb" stroke="#1e1e1e" stroke-width="2"/>
+<rect class="sk" x="685" y="191" width="28" height="24" rx="10" fill="#b2f2bb" stroke="#1e1e1e" stroke-width="2"/>
+<rect class="sk" x="722" y="191" width="28" height="24" rx="10" fill="#b2f2bb" stroke="#1e1e1e" stroke-width="2"/>
+<rect class="sk" x="759" y="191" width="28" height="24" rx="10" fill="#b2f2bb" stroke="#1e1e1e" stroke-width="2"/>
+<rect class="sk" x="796" y="191" width="28" height="24" rx="10" fill="#b2f2bb" stroke="#1e1e1e" stroke-width="2"/>
+<rect class="sk" x="500" y="224" width="28" height="24" rx="10" fill="#b2f2bb" stroke="#1e1e1e" stroke-width="2"/>
+<rect class="sk" x="537" y="224" width="28" height="24" rx="10" fill="#b2f2bb" stroke="#1e1e1e" stroke-width="2"/>
+<rect class="sk" x="574" y="224" width="28" height="24" rx="10" fill="#b2f2bb" stroke="#1e1e1e" stroke-width="2"/>
+<rect class="sk" x="611" y="224" width="28" height="24" rx="10" fill="#b2f2bb" stroke="#1e1e1e" stroke-width="2"/>
+<rect class="sk" x="648" y="224" width="28" height="24" rx="10" fill="#b2f2bb" stroke="#1e1e1e" stroke-width="2"/>
+<rect class="sk" x="685" y="224" width="28" height="24" rx="10" fill="#b2f2bb" stroke="#1e1e1e" stroke-width="2"/>
+<rect class="sk" x="722" y="224" width="28" height="24" rx="10" fill="#b2f2bb" stroke="#1e1e1e" stroke-width="2"/>
+<rect class="sk" x="759" y="224" width="28" height="24" rx="10" fill="#b2f2bb" stroke="#1e1e1e" stroke-width="2"/>
+<rect class="sk" x="796" y="224" width="28" height="24" rx="10" fill="#b2f2bb" stroke="#1e1e1e" stroke-width="2"/>
+<text x="665" y="282" font-size="18" text-anchor="middle" font-weight="normal" fill="#1e1e1e">thousands of threads, one per star,</text>
+<text x="665" y="306" font-size="18" text-anchor="middle" font-weight="normal" fill="#1e1e1e">all running at the same time</text>
+<rect class="sk" x="170" y="342" width="560" height="42" rx="10" fill="#ffec99" stroke="#1e1e1e" stroke-width="2"/>
+<text x="450.0" y="368.6" font-size="16" text-anchor="middle" font-weight="normal" fill="#1e1e1e">every thread runs the same loop:  for each other star, add its pull</text>
+</svg>

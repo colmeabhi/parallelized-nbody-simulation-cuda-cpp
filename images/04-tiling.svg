@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 460" width="900" height="460" font-family="'Virgil','Segoe Print','Bradley Hand','Comic Sans MS','Chalkboard SE','Marker Felt',cursive">
+<defs>
+<filter id="rough" filterUnits="userSpaceOnUse" x="0" y="0" width="900" height="460"><feTurbulence type="fractalNoise" baseFrequency="0.035" numOctaves="2" seed="4" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="3.2"/></filter>
+<marker id="arr" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="9" markerHeight="9" orient="auto-start-reverse"><path d="M1 1 L11 6 L1 11" fill="none" stroke="#1e1e1e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></marker>
+<marker id="arrr" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="9" markerHeight="9" orient="auto-start-reverse"><path d="M1 1 L11 6 L1 11" fill="none" stroke="#e03131" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></marker>
+<style>.sk{filter:url(#rough)}</style>
+</defs>
+<rect x="1" y="1" width="898" height="458" rx="14" fill="#ffffff" stroke="#dee2e6"/>
+<text x="450" y="42" font-size="24" text-anchor="middle" font-weight="bold" fill="#1e1e1e">Naive vs tiled: where do the positions come from?</text>
+<rect class="sk" x="30" y="62" width="405" height="380" rx="10" fill="#f8f9fa" stroke="#1e1e1e" stroke-width="2" stroke-dasharray="8 6"/>
+<text x="232" y="92" font-size="20" text-anchor="middle" font-weight="bold" fill="#1e1e1e">NAIVE</text>
+<rect class="sk" x="60" y="108" width="345" height="50" rx="10" fill="#ffd8a8" stroke="#1e1e1e" stroke-width="2"/>
+<text x="232.5" y="137.9" font-size="14" text-anchor="middle" font-weight="normal" fill="#1e1e1e">global memory: all N positions (far away, slow)</text>
+<rect class="sk" x="465" y="62" width="405" height="380" rx="10" fill="#f8f9fa" stroke="#1e1e1e" stroke-width="2" stroke-dasharray="8 6"/>
+<text x="667" y="92" font-size="20" text-anchor="middle" font-weight="bold" fill="#1e1e1e">TILED</text>
+<rect class="sk" x="495" y="108" width="345" height="50" rx="10" fill="#ffd8a8" stroke="#1e1e1e" stroke-width="2"/>
+<text x="667.5" y="137.9" font-size="14" text-anchor="middle" font-weight="normal" fill="#1e1e1e">global memory: all N positions (far away, slow)</text>
+<rect class="sk" x="55" y="300" width="40" height="40" rx="10" fill="#b2f2bb" stroke="#1e1e1e" stroke-width="2"/>
+<text x="75.0" y="324.9" font-size="14" text-anchor="middle" font-weight="normal" fill="#1e1e1e">T0</text>
+<line class="sk" x1="75" y1="296" x2="75" y2="164" stroke="#495057" stroke-width="1.8" stroke-linecap="round" marker-end="url(#arr)"/>
+<line class="sk" x1="84" y1="296" x2="84" y2="164" stroke="#495057" stroke-width="1.8" stroke-linecap="round" marker-end="url(#arr)"/>
+<rect class="sk" x="113" y="300" width="40" height="40" rx="10" fill="#b2f2bb" stroke="#1e1e1e" stroke-width="2"/>
+<text x="133.0" y="324.9" font-size="14" text-anchor="middle" font-weight="normal" fill="#1e1e1e">T1</text>
+<line class="sk" x1="133" y1="296" x2="133" y2="164" stroke="#495057" stroke-width="1.8" stroke-linecap="round" marker-end="url(#arr)"/>
+<line class="sk" x1="142" y1="296" x2="142" y2="164" stroke="#495057" stroke-width="1.8" stroke-linecap="round" marker-end="url(#arr)"/>
+<rect class="sk" x="171" y="300" width="40" height="40" rx="10" fill="#b2f2bb" stroke="#1e1e1e" stroke-width="2"/>
+<text x="191.0" y="324.9" font-size="14" text-anchor="middle" font-weight="normal" fill="#1e1e1e">T2</text>
+<line class="sk" x1="191" y1="296" x2="191" y2="164" stroke="#495057" stroke-width="1.8" stroke-linecap="round" marker-end="url(#arr)"/>
+<line class="sk" x1="200" y1="296" x2="200" y2="164" stroke="#495057" stroke-width="1.8" stroke-linecap="round" marker-end="url(#arr)"/>
+<rect class="sk" x="229" y="300" width="40" height="40" rx="10" fill="#b2f2bb" stroke="#1e1e1e" stroke-width="2"/>
+<text x="249.0" y="324.9" font-size="14" text-anchor="middle" font-weight="normal" fill="#1e1e1e">T3</text>
+<line class="sk" x1="249" y1="296" x2="249" y2="164" stroke="#495057" stroke-width="1.8" stroke-linecap="round" marker-end="url(#arr)"/>
+<line class="sk" x1="258" y1="296" x2="258" y2="164" stroke="#495057" stroke-width="1.8" stroke-linecap="round" marker-end="url(#arr)"/>
+<rect class="sk" x="287" y="300" width="40" height="40" rx="10" fill="#b2f2bb" stroke="#1e1e1e" stroke-width="2"/>
+<text x="307.0" y="324.9" font-size="14" text-anchor="middle" font-weight="normal" fill="#1e1e1e">T4</text>
+<line class="sk" x1="307" y1="296" x2="307" y2="164" stroke="#495057" stroke-width="1.8" stroke-linecap="round" marker-end="url(#arr)"/>
+<line class="sk" x1="316" y1="296" x2="316" y2="164" stroke="#495057" stroke-width="1.8" stroke-linecap="round" marker-end="url(#arr)"/>
+<rect class="sk" x="345" y="300" width="40" height="40" rx="10" fill="#b2f2bb" stroke="#1e1e1e" stroke-width="2"/>
+<text x="365.0" y="324.9" font-size="14" text-anchor="middle" font-weight="normal" fill="#1e1e1e">T5</text>
+<line class="sk" x1="365" y1="296" x2="365" y2="164" stroke="#495057" stroke-width="1.8" stroke-linecap="round" marker-end="url(#arr)"/>
+<line class="sk" x1="374" y1="296" x2="374" y2="164" stroke="#495057" stroke-width="1.8" stroke-linecap="round" marker-end="url(#arr)"/>
+<text x="232" y="372" font-size="16" text-anchor="middle" font-weight="normal" fill="#1e1e1e">each thread fetches every position</text>
+<text x="232" y="396" font-size="16" text-anchor="middle" font-weight="normal" fill="#1e1e1e">from global memory by itself</text>
+<text x="232" y="424" font-size="16" text-anchor="middle" font-weight="bold" fill="#e03131">N loads per thread</text>
+<line class="sk" x1="667" y1="162" x2="667" y2="194" stroke="#1e1e1e" stroke-width="3" stroke-linecap="round" marker-end="url(#arr)"/>
+<text x="690" y="182" font-size="14" text-anchor="start" font-weight="normal" fill="#1e1e1e">copy one tile, once</text>
+<rect class="sk" x="525" y="200" width="285" height="50" rx="10" fill="#ffec99" stroke="#1e1e1e" stroke-width="2"/>
+<text x="667.5" y="229.9" font-size="14" text-anchor="middle" font-weight="normal" fill="#1e1e1e">shared memory: 1 tile = 256 positions</text>
+<rect class="sk" x="502" y="300" width="40" height="40" rx="10" fill="#b2f2bb" stroke="#1e1e1e" stroke-width="2"/>
+<text x="522.0" y="324.9" font-size="14" text-anchor="middle" font-weight="normal" fill="#1e1e1e">T0</text>
+<line class="sk" x1="522" y1="296" x2="560" y2="256" stroke="#495057" stroke-width="1.8" stroke-linecap="round" marker-end="url(#arr)"/>
+<rect class="sk" x="560" y="300" width="40" height="40" rx="10" fill="#b2f2bb" stroke="#1e1e1e" stroke-width="2"/>
+<text x="580.0" y="324.9" font-size="14" text-anchor="middle" font-weight="normal" fill="#1e1e1e">T1</text>
+<line class="sk" x1="580" y1="296" x2="603" y2="256" stroke="#495057" stroke-width="1.8" stroke-linecap="round" marker-end="url(#arr)"/>
+<rect class="sk" x="618" y="300" width="40" height="40" rx="10" fill="#b2f2bb" stroke="#1e1e1e" stroke-width="2"/>
+<text x="638.0" y="324.9" font-size="14" text-anchor="middle" font-weight="normal" fill="#1e1e1e">T2</text>
+<line class="sk" x1="638" y1="296" x2="646" y2="256" stroke="#495057" stroke-width="1.8" stroke-linecap="round" marker-end="url(#arr)"/>
+<rect class="sk" x="676" y="300" width="40" height="40" rx="10" fill="#b2f2bb" stroke="#1e1e1e" stroke-width="2"/>
+<text x="696.0" y="324.9" font-size="14" text-anchor="middle" font-weight="normal" fill="#1e1e1e">T3</text>
+<line class="sk" x1="696" y1="296" x2="689" y2="256" stroke="#495057" stroke-width="1.8" stroke-linecap="round" marker-end="url(#arr)"/>
+<rect class="sk" x="734" y="300" width="40" height="40" rx="10" fill="#b2f2bb" stroke="#1e1e1e" stroke-width="2"/>
+<text x="754.0" y="324.9" font-size="14" text-anchor="middle" font-weight="normal" fill="#1e1e1e">T4</text>
+<line class="sk" x1="754" y1="296" x2="732" y2="256" stroke="#495057" stroke-width="1.8" stroke-linecap="round" marker-end="url(#arr)"/>
+<rect class="sk" x="792" y="300" width="40" height="40" rx="10" fill="#b2f2bb" stroke="#1e1e1e" stroke-width="2"/>
+<text x="812.0" y="324.9" font-size="14" text-anchor="middle" font-weight="normal" fill="#1e1e1e">T5</text>
+<line class="sk" x1="812" y1="296" x2="775" y2="256" stroke="#495057" stroke-width="1.8" stroke-linecap="round" marker-end="url(#arr)"/>
+<text x="667" y="372" font-size="16" text-anchor="middle" font-weight="normal" fill="#1e1e1e">the block loads a tile together,</text>
+<text x="667" y="396" font-size="16" text-anchor="middle" font-weight="normal" fill="#1e1e1e">then all 256 threads reuse it</text>
+<text x="667" y="424" font-size="16" text-anchor="middle" font-weight="bold" fill="#2f9e44">16x fewer global loads (measured)</text>
+</svg>

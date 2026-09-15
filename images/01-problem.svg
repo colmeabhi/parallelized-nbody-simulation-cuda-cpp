@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 400" width="900" height="400" font-family="'Virgil','Segoe Print','Bradley Hand','Comic Sans MS','Chalkboard SE','Marker Felt',cursive">
+<defs>
+<filter id="rough" filterUnits="userSpaceOnUse" x="0" y="0" width="900" height="400"><feTurbulence type="fractalNoise" baseFrequency="0.035" numOctaves="2" seed="4" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="3.2"/></filter>
+<marker id="arr" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="9" markerHeight="9" orient="auto-start-reverse"><path d="M1 1 L11 6 L1 11" fill="none" stroke="#1e1e1e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></marker>
+<marker id="arrr" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="9" markerHeight="9" orient="auto-start-reverse"><path d="M1 1 L11 6 L1 11" fill="none" stroke="#e03131" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></marker>
+<style>.sk{filter:url(#rough)}</style>
+</defs>
+<rect x="1" y="1" width="898" height="398" rx="14" fill="#ffffff" stroke="#dee2e6"/>
+<text x="450" y="44" font-size="26" text-anchor="middle" font-weight="bold" fill="#1e1e1e">Every star pulls on every other star</text>
+<line class="sk" x1="150" y1="150" x2="290" y2="120" stroke="#adb5bd" stroke-width="1.5" stroke-linecap="round"/>
+<line class="sk" x1="150" y1="150" x2="350" y2="230" stroke="#adb5bd" stroke-width="1.5" stroke-linecap="round"/>
+<line class="sk" x1="150" y1="150" x2="240" y2="310" stroke="#adb5bd" stroke-width="1.5" stroke-linecap="round"/>
+<line class="sk" x1="150" y1="150" x2="110" y2="270" stroke="#adb5bd" stroke-width="1.5" stroke-linecap="round"/>
+<line class="sk" x1="150" y1="150" x2="220" y2="215" stroke="#adb5bd" stroke-width="1.5" stroke-linecap="round"/>
+<line class="sk" x1="290" y1="120" x2="350" y2="230" stroke="#adb5bd" stroke-width="1.5" stroke-linecap="round"/>
+<line class="sk" x1="290" y1="120" x2="240" y2="310" stroke="#adb5bd" stroke-width="1.5" stroke-linecap="round"/>
+<line class="sk" x1="290" y1="120" x2="110" y2="270" stroke="#adb5bd" stroke-width="1.5" stroke-linecap="round"/>
+<line class="sk" x1="290" y1="120" x2="220" y2="215" stroke="#adb5bd" stroke-width="1.5" stroke-linecap="round"/>
+<line class="sk" x1="350" y1="230" x2="240" y2="310" stroke="#adb5bd" stroke-width="1.5" stroke-linecap="round"/>
+<line class="sk" x1="350" y1="230" x2="110" y2="270" stroke="#adb5bd" stroke-width="1.5" stroke-linecap="round"/>
+<line class="sk" x1="350" y1="230" x2="220" y2="215" stroke="#adb5bd" stroke-width="1.5" stroke-linecap="round"/>
+<line class="sk" x1="240" y1="310" x2="110" y2="270" stroke="#adb5bd" stroke-width="1.5" stroke-linecap="round"/>
+<line class="sk" x1="240" y1="310" x2="220" y2="215" stroke="#adb5bd" stroke-width="1.5" stroke-linecap="round"/>
+<line class="sk" x1="110" y1="270" x2="220" y2="215" stroke="#adb5bd" stroke-width="1.5" stroke-linecap="round"/>
+<line class="sk" x1="203.87854318422143" y1="200.0300758139199" x2="174.56680351916947" y2="172.81203183922878" stroke="#e03131" stroke-width="2.5" stroke-linecap="round" marker-end="url(#arrr)"/>
+<line class="sk" x1="233.0503788370967" y1="197.28877157822592" x2="256.7783403590907" y2="165.0865380840912" stroke="#e03131" stroke-width="2.5" stroke-linecap="round" marker-end="url(#arrr)"/>
+<line class="sk" x1="241.8549965891649" y1="217.52173037567286" x2="281.5913540240101" y2="222.1066946950781" stroke="#e03131" stroke-width="2.5" stroke-linecap="round" marker-end="url(#arrr)"/>
+<line class="sk" x1="224.53223058309652" y1="236.52809526970847" x2="232.7726498250902" y2="275.67008666917843" stroke="#e03131" stroke-width="2.5" stroke-linecap="round" marker-end="url(#arrr)"/>
+<line class="sk" x1="200.32260179800184" y1="224.83869910099907" x2="164.54551415800523" y2="242.7272429209974" stroke="#e03131" stroke-width="2.5" stroke-linecap="round" marker-end="url(#arrr)"/>
+<circle class="sk" cx="150" cy="150" r="16" fill="#a5d8ff" stroke="#1e1e1e" stroke-width="2"/>
+<circle class="sk" cx="290" cy="120" r="16" fill="#a5d8ff" stroke="#1e1e1e" stroke-width="2"/>
+<circle class="sk" cx="350" cy="230" r="16" fill="#a5d8ff" stroke="#1e1e1e" stroke-width="2"/>
+<circle class="sk" cx="240" cy="310" r="16" fill="#a5d8ff" stroke="#1e1e1e" stroke-width="2"/>
+<circle class="sk" cx="110" cy="270" r="16" fill="#a5d8ff" stroke="#1e1e1e" stroke-width="2"/>
+<circle class="sk" cx="220" cy="215" r="18" fill="#ffec99" stroke="#1e1e1e" stroke-width="2"/>
+<text x="230" y="372" font-size="17" text-anchor="middle" font-weight="normal" fill="#1e1e1e">6 stars = 36 pulls to add up</text>
+<text x="660" y="100" font-size="20" text-anchor="middle" font-weight="bold" fill="#1e1e1e">N stars  =  N x N pulls, every step</text>
+<rect class="sk" x="470" y="130" width="170" height="50" rx="10" fill="#e9ecef" stroke="#1e1e1e" stroke-width="2"/>
+<text x="555.0" y="160.95" font-size="17" text-anchor="middle" font-weight="normal" fill="#1e1e1e">1,024 stars</text>
+<line class="sk" x1="648" y1="155" x2="692" y2="155" stroke="#1e1e1e" stroke-width="2" stroke-linecap="round" marker-end="url(#arr)"/>
+<rect class="sk" x="700" y="130" width="170" height="50" rx="10" fill="#b2f2bb" stroke="#1e1e1e" stroke-width="2"/>
+<text x="785.0" y="160.95" font-size="17" text-anchor="middle" font-weight="normal" fill="#1e1e1e">1 million pulls</text>
+<rect class="sk" x="470" y="198" width="170" height="50" rx="10" fill="#e9ecef" stroke="#1e1e1e" stroke-width="2"/>
+<text x="555.0" y="228.95" font-size="17" text-anchor="middle" font-weight="normal" fill="#1e1e1e">16,384 stars</text>
+<line class="sk" x1="648" y1="223" x2="692" y2="223" stroke="#1e1e1e" stroke-width="2" stroke-linecap="round" marker-end="url(#arr)"/>
+<rect class="sk" x="700" y="198" width="170" height="50" rx="10" fill="#ffec99" stroke="#1e1e1e" stroke-width="2"/>
+<text x="785.0" y="228.95" font-size="17" text-anchor="middle" font-weight="normal" fill="#1e1e1e">268 million pulls</text>
+<rect class="sk" x="470" y="266" width="170" height="50" rx="10" fill="#e9ecef" stroke="#1e1e1e" stroke-width="2"/>
+<text x="555.0" y="296.95" font-size="17" text-anchor="middle" font-weight="normal" fill="#1e1e1e">65,536 stars</text>
+<line class="sk" x1="648" y1="291" x2="692" y2="291" stroke="#1e1e1e" stroke-width="2" stroke-linecap="round" marker-end="url(#arr)"/>
+<rect class="sk" x="700" y="266" width="170" height="50" rx="10" fill="#ffc9c9" stroke="#1e1e1e" stroke-width="2"/>
+<text x="785.0" y="296.95" font-size="17" text-anchor="middle" font-weight="normal" fill="#1e1e1e">4.3 billion pulls</text>
+<text x="670" y="362" font-size="17" text-anchor="middle" font-weight="normal" fill="#1e1e1e">...and a simulation needs thousands of steps</text>
+</svg>
