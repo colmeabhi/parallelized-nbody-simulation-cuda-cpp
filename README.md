@@ -1,248 +1,300 @@
-# Parallel N-Body Simulation (CUDA + C++/OpenMP)
+# Galaxy N-Body Simulation on the GPU
 
-GPU-accelerated N-body gravitational simulation of a Milky Way-like galaxy,
-with CPU baselines, energy-conservation checks, benchmarks and profiling.
+A small galaxy (one black hole, a disk of stars and a central bulge) where
+every star feels the gravity of every other star. The same simulation is
+written four ways so they can be compared:
 
-| Solver | Where | Complexity | Source |
-|---|---|---|---|
-| Direct sum, single thread (SIMD-vectorised) | CPU | O(N²) | `nbody/src/cpu_nbody.cpp` |
-| Direct sum, OpenMP | CPU | O(N²) | `nbody/src/cpu_nbody.cpp` |
-| Barnes–Hut octree, θ = 0.5, OpenMP | CPU | O(N log N) | `nbody/src/cpu_nbody.cpp` |
-| Direct sum, **naive** kernel (global memory) | GPU | O(N²) | `nbody/src/nbody_kernel.cu` |
-| Direct sum, **tiled** kernel (shared memory) | GPU | O(N²) | `nbody/src/nbody_kernel.cu` |
+| Version | Where it runs | File |
+|---|---|---|
+| CPU, 1 thread | one CPU core | `src/cpu_nbody.cpp` |
+| CPU, OpenMP | all CPU cores | `src/cpu_nbody.cpp` |
+| GPU, naive | NVIDIA GPU (CUDA) | `src/gpu_nbody.cu` |
+| GPU, tiled | NVIDIA GPU (CUDA), using shared memory | `src/gpu_nbody.cu` |
 
-All of them use the same initial conditions, the same Plummer softening
-(ε = 0.02) and the same **kick-drift-kick leapfrog** integrator, so the
-timings and energy figures compare like with like.
+**Headline result:** with 65,536 stars on an A100, the tiled GPU version takes
+8 ms per step. One CPU thread takes 1.5 seconds. That is about 190x faster.
 
-## Project structure
+---
 
-```
-├── nbody/
-│   ├── src/
-│   │   ├── common.h                    vec4, Energy, constants (CPU + GPU)
-│   │   ├── galaxy_ics.{h,cpp}          galaxy initial conditions
-│   │   ├── cpu_nbody.{h,cpp}           serial / OpenMP / Barnes–Hut + energy
-│   │   ├── nbody_kernel.{cuh,cu}       CUDA kernels: naive, tiled, KDK, energy
-│   │   ├── galaxy_simulation.{cuh,cu}  GPU time loop, snapshots, energy log
-│   │   ├── main.cu                     galaxy_nbody (simulation + visualisation output)
-│   │   ├── bench_gpu.cu                nbody_bench_gpu  (CSV benchmark row)
-│   │   └── bench_cpu.cpp               nbody_bench_cpu  (CSV benchmark row)
-│   ├── CMakeLists.txt                  CPU targets always; CUDA targets if nvcc found
-│   ├── build.sh                        nvcc/g++ build without CMake
-│   ├── visualize.py                    animation of simulation.bin
-│   └── README.md                       build / run / physics details
-├── scripts/
-│   ├── run_benchmarks.sh               all benchmarks → results/*.csv
-│   ├── profile_ncu.sh                  Nsight Compute naive vs tiled → results/ncu_metrics.csv
-│   ├── make_report.py                  results/*.csv → charts + the section below
-│   └── modal_bench.py                  run all of the above on one Modal A100 container
-└── results/                            measured data and charts
-```
+## 1. The problem
 
-## Quick start
+![Every star pulls on every other star](images/01-problem.svg)
+
+To move the stars forward by one small time step, we need the total pull on
+each star. That means looking at every pair of stars, so the work grows with
+the **square** of the number of stars. Double the stars, four times the work.
+
+## 2. The idea
+
+![Give every star its own GPU thread](images/02-cpu-vs-gpu.svg)
+
+The pull on star 1 does not depend on the pull on star 2, so they can be
+computed at the same time. A GPU can run thousands of threads at once, so we
+give each star its own thread.
+
+---
+
+## 3. Quick start
+
+You need `g++`, `make` and, for the GPU parts, the CUDA toolkit (`nvcc`).
 
 ```bash
-cd nbody
-cmake -S . -B build && cmake --build build -j
-./build/galaxy_nbody                 # 4096 bodies, 5000 KDK steps → simulation.bin, energy.csv
-python3 visualize.py simulation.bin
-```
-
-Reproduce every number below (GPU sections run only if a GPU is visible):
-
-```bash
-scripts/run_benchmarks.sh
+make
 ```
 
 ```bash
-scripts/profile_ncu.sh
+./build/galaxy_nbody
 ```
 
 ```bash
-python3 scripts/make_report.py
+python3 plots/visualize.py simulation.bin
 ```
 
-No local GPU? The same pipeline runs on one [Modal](https://modal.com) A100
-container (CPU + GPU + Nsight Compute + report, about 15 minutes), which is
-how the numbers below were produced:
+The second command simulates 4,096 stars for 5,000 steps on the GPU and saves
+`simulation.bin`. The third one plays it as an animation
+(`pip install numpy matplotlib` first).
 
-```bash
-modal run scripts/modal_bench.py
+No GPU? `make cpu` builds only the CPU programs.
+
+---
+
+## 4. How it works
+
+### 4.1 The force loop
+
+This is the whole physics, and it is the same on the CPU and the GPU:
+
+```cpp
+for (int j = 0; j < n; j++) {
+    float dx = pos[j].x - pos[i].x;      // vector from star i to star j
+    float dy = pos[j].y - pos[i].y;
+    float dz = pos[j].z - pos[i].z;
+
+    float dist_squared = dx*dx + dy*dy + dz*dz + SOFTENING_SQUARED;
+    float inv_dist     = 1.0f / sqrt(dist_squared);
+    float strength     = mass_j * inv_dist * inv_dist * inv_dist;
+
+    ax += dx * strength;                 // add the pull of star j
+    ay += dy * strength;
+    az += dz * strength;
+}
 ```
 
-## How one timestep works on the GPU
+`SOFTENING_SQUARED` is a small number added so the force does not blow up when
+two stars get very close.
 
-```mermaid
-flowchart LR
-    A["kick_drift_kernel<br/>v += a·dt/2<br/>x += v·dt<br/><i>each thread: own body only</i>"]
-    -- "launch boundary =<br/>grid-wide barrier" -->
-    B["accel_tiled_kernel / accel_naive_kernel<br/>a = F(x)  (reads ALL x, read-only)<br/>v += a·dt/2<br/><i>writes only acc[i], vel[i]</i>"]
-    B -- "next step" --> A
-```
+### 4.2 A bug worth knowing: the race condition
 
-**The race this replaces.** The original code had one kernel that computed
-the force *and* then wrote `pos[i]`. Blocks run in no fixed order, so while
-block 0 was writing its new positions, block 7 could still be loading a tile
-that included them. Body *i* then felt some bodies at time *t* and others at
-*t + dt*, and the result depended on scheduling. Now no kernel writes the
-array it reads from all threads: positions only change in `kick_drift_kernel`,
-and the kernel launch boundary guarantees every block finished reading first.
+![The race condition and the fix](images/03-race.svg)
 
-**The integrator.** The original update `v += a·dt; x += v·dt` was
-semi-implicit (symplectic) Euler, which is first order. It is now a real
-kick-drift-kick leapfrog (second order, time-reversible) that still needs only
-one force evaluation per step, because `a(x_{n+1})` from the end of one step
-is reused as the first half-kick of the next. Euler stays available
-(`--integrator euler`) so the two can be compared.
+The first version did everything in one kernel: compute the pull, then update
+the position. But GPU blocks run in any order. One block could overwrite
+positions while another was still reading them, so a star could feel some
+neighbours at the old time and some at the new time. The result changed from
+run to run.
 
-**Example, one body, dt = 0.1, a = −x (spring):** starting at x = 1, v = 0,
-Euler gives v₁ = −0.1, x₁ = 0.99. KDK gives v½ = −0.05, x₁ = 0.995,
-v₁ = −0.05 − 0.995·0.05 = −0.09975. The exact answer is
-x = cos 0.1 = 0.99500, v = −sin 0.1 = −0.09983. KDK's position error is
-5·10⁻⁶; Euler's is 5·10⁻³.
+**The fix:** split the step into small kernels. Positions are only written by
+the `drift` kernel, and a kernel only starts after the previous one has
+finished.
 
-## Results
+### 4.3 Naive vs tiled
 
-<!-- RESULTS:BEGIN -->
-_Generated by `scripts/make_report.py` from `results/*.csv` — do not edit by hand._
+![Naive vs tiled memory access](images/04-tiling.svg)
 
-**Hardware:** CPU x86-64 (model name hidden by the Modal sandbox) [AVX2] (8 threads), GPU NVIDIA A100-SXM4-40GB, 8.0, 610.57.04
+Both GPU kernels compute exactly the same forces. They differ in how they
+read the positions:
 
-### Direct summation: time per step, speedup, throughput
+- **Naive:** every thread reads every position from global memory.
+- **Tiled:** the threads of a block work as a team. Each thread copies one
+  position into **shared memory** (small, fast memory that belongs to the
+  block), so together they load a "tile" of 256 positions. Then all of them
+  loop over that tile. Repeat for the next tile.
 
-One step = one force evaluation (N² interactions) + one KDK integration kernel. GFLOP/s uses the 20 FLOP/interaction convention. Speedup is against the single-thread CPU code at the same N.
+### 4.4 Euler vs KDK leapfrog
 
-| N | implementation | ms / step | speedup vs serial | interactions / s | GFLOP/s | ΔE/E₀ (run) |
-|---|---|--:|--:|--:|--:|--:|
-| 1K | CPU serial (1 thread, SIMD) | 0.377 | 1.0× | 2.78 G/s | 55.6 | — |
-|  | CPU OpenMP | 0.081 | 4.7× | 13.00 G/s | 260.0 | — |
-|  | GPU naive | 0.124 | 3.1× | 8.49 G/s | 169.7 | 1.9e-02 |
-|  | GPU tiled (shared mem) | 0.056 | 6.7× | 18.72 G/s | 374.3 | 1.9e-02 |
-| 4K | CPU serial (1 thread, SIMD) | 5.815 | 1.0× | 2.88 G/s | 57.7 | — |
-|  | CPU OpenMP | 0.826 | 7.0× | 20.31 G/s | 406.2 | — |
-|  | GPU naive | 0.489 | 11.9× | 34.34 G/s | 686.7 | 5.2e-03 |
-|  | GPU tiled (shared mem) | 0.189 | 30.8× | 88.75 G/s | 1,774.9 | 5.2e-03 |
-| 16K | CPU serial (1 thread, SIMD) | 92.4 | 1.0× | 2.91 G/s | 58.1 | — |
-|  | CPU OpenMP | 12.0 | 7.7× | 22.32 G/s | 446.4 | — |
-|  | GPU naive | 1.834 | 50.4× | 146.36 G/s | 2,927.2 | 5.1e-04 |
-|  | GPU tiled (shared mem) | 0.741 | 124.7× | 362.25 G/s | 7,245.0 | 5.1e-04 |
-| 64K | CPU serial (1 thread, SIMD) | 1,493.3 | 1.0× | 2.88 G/s | 57.5 | — |
-|  | CPU OpenMP | 189.5 | 7.9× | 22.67 G/s | 453.4 | — |
-|  | GPU naive | 9.061 | 164.8× | 474.00 G/s | 9,480.0 | 7.5e-04 |
-|  | GPU tiled (shared mem) | 7.973 | 187.3× | 538.68 G/s | 10,773.5 | 7.5e-04 |
+![Euler and KDK time steps](images/05-integrators.svg)
 
-![Time per step and throughput vs N](results/scaling.png)
+Once we know the pull (acceleration), we still have to move the stars. Two
+methods are included:
 
-### GPU block-size sweep
+- **Euler** is the simplest: use the pull for the whole step.
+- **KDK** (kick-drift-kick, also called leapfrog) splits the velocity update
+  into two halves, one before moving and one after. It costs the same but is
+  noticeably more accurate.
 
-| N | kernel | block 64 | block 128 | block 256 | block 512 |
+A quick example: a ball on a spring starts at x = 1. After one step of 0.1 the
+exact answer is x = 0.99500. Euler gives 0.99000. KDK gives 0.99500.
+
+How do we know a simulation is accurate? **Total energy should stay constant.**
+`bench/energy_drift.cpp` measures how much it changes.
+
+---
+
+## 5. Results
+
+Measured on an **NVIDIA A100 (40 GB)** and 8 CPU cores of the same cloud
+machine (Modal).
+
+> **Note:** these numbers were measured with the earlier, longer version of
+> this code (commit `37d7f78`), before it was simplified. The GPU force loops
+> are the same. The CPU loop was hand-tuned back then and is a plain loop now,
+> so a fresh run will show a slower CPU and larger GPU speedups. To refresh
+> everything, run `modal run bench/modal_bench.py`.
+
+### Time per step
+
+![Time per step vs number of bodies](results/scaling.png)
+
+| N | version | ms per step | speedup | interactions / s | GFLOP/s |
 |---|---|--:|--:|--:|--:|
-| 1K | GPU naive | 185 | 188 | 186 | **205** |
-| 1K | GPU tiled (shared mem) | 467 | **486** | 407 | 211 |
-| 4K | GPU naive | 602 | 741 | **752** | 736 |
-| 4K | GPU tiled (shared mem) | 2,059 | **2,164** | 1,784 | 1,019 |
-| 16K | GPU naive | **2,972** | 2,539 | 2,349 | 2,224 |
-| 16K | GPU tiled (shared mem) | 5,333 | 5,350 | **5,660** | 3,208 |
-| 64K | GPU naive | 8,936 | **11,518** | 9,468 | 7,672 |
-| 64K | GPU tiled (shared mem) | 11,986 | **12,167** | 10,784 | 8,353 |
+| 1K | CPU, 1 thread | 0.377 | 1.0x | 2.8 billion | 56 |
+| 1K | CPU, OpenMP | 0.081 | 4.7x | 13.0 billion | 260 |
+| 1K | GPU, naive | 0.124 | 3.1x | 8.5 billion | 170 |
+| 1K | GPU, tiled | 0.056 | 6.7x | 18.7 billion | 374 |
+| 4K | CPU, 1 thread | 5.815 | 1.0x | 2.9 billion | 58 |
+| 4K | CPU, OpenMP | 0.826 | 7.0x | 20.3 billion | 406 |
+| 4K | GPU, naive | 0.489 | 11.9x | 34.3 billion | 687 |
+| 4K | GPU, tiled | 0.189 | 30.8x | 88.7 billion | 1,775 |
+| 16K | CPU, 1 thread | 92.381 | 1.0x | 2.9 billion | 58 |
+| 16K | CPU, OpenMP | 12.027 | 7.7x | 22.3 billion | 446 |
+| 16K | GPU, naive | 1.834 | 50.4x | 146.4 billion | 2,927 |
+| 16K | GPU, tiled | 0.741 | 124.7x | 362.2 billion | 7,245 |
+| 64K | CPU, 1 thread | 1493.349 | 1.0x | 2.9 billion | 58 |
+| 64K | CPU, OpenMP | 189.460 | 7.9x | 22.7 billion | 453 |
+| 64K | GPU, naive | 9.061 | 164.8x | 474.0 billion | 9,480 |
+| 64K | GPU, tiled | 7.973 | 187.3x | 538.7 billion | 10,774 |
 
-GFLOP/s; best block size per row in bold.
+Speedup is against one CPU thread at the same N. GFLOP/s counts each
+interaction as 20 floating point operations, which is the usual convention.
+
+What this shows:
+
+- **Small N: the GPU barely helps.** At 1K stars, starting a kernel costs
+  about as much as the work itself, and 8 CPU threads beat the naive kernel.
+- **Large N: the GPU wins by a lot.** At 64K the tiled kernel is 187x faster
+  than one CPU thread and 24x faster than 8 threads.
+- **Tiling helps most in the middle.** Tiled is 2.2x to 2.6x faster than
+  naive up to 16K, but only 1.14x at 64K.
+
+### Block size
 
 ![GFLOP/s vs block size](results/block_sweep.png)
 
-### Nsight Compute: naive vs tiled
+The block size is the number of threads per block, and for the tiled kernel
+it is also the tile size. **128 is best or close to best at most sizes.** 512
+is always the slowest choice for the tiled kernel, up to 2.3x slower.
 
-| metric | GPU naive N=16K | GPU tiled (shared mem) N=16K | GPU naive N=64K | GPU tiled (shared mem) N=64K |
+### Why is tiled faster? (Nsight Compute)
+
+One force calculation, profiled with NVIDIA's profiler:
+
+| | naive, 16K | tiled, 16K | naive, 64K | tiled, 64K |
 |---|--:|--:|--:|--:|
-| kernel time [ns] | 2159200 | 829888 | 9042656 | 10250240 |
-| compute throughput (% peak) | 19.46 | 48.83 | 63.20 | 71.92 |
-| memory throughput (% peak) | 11.98 | 15.29 | 38.90 | 22.50 |
-| DRAM throughput (% peak) | 0.02 | 0.04 | 0.01 | 0.01 |
-| L2 traffic [byte] | 19037376 | 18941472 | 140265152 | 277734080 |
-| global-load bytes (L1) [byte] | 268959744 | 17301504 | 4297064448 | 270532608 |
-| shared-mem wavefronts | 512 | 16916992 | 2048 | 270665728 |
-| achieved occupancy (%) | 12.50 | 12.50 | 28.78 | 23.45 |
-| theoretical occupancy (%) | 100 | 100 | 100 | 100 |
-| registers / thread [register/thread] | 32 | 32 | 32 | 32 |
-| stall: long scoreboard (cyc) | — | — | — | — |
-| stall: barrier (cyc) | — | — | — | — |
+| Bytes loaded from global memory | 269 MB | 17 MB | 4.30 GB | 0.27 GB |
+| Shared memory accesses | ~0 | 17 million | ~0 | 271 million |
+| Compute units busy (% of peak) | 19% | 49% | 63% | 72% |
+| Occupancy possible | 100% | 100% | 100% | 100% |
+| Occupancy achieved | 12.5% | 12.5% | 28.8% | 23.5% |
+
+Tiling cuts global memory loads by **16x** and replaces them with shared
+memory accesses. With less waiting on memory, the compute units are busier
+(19% to 49% at 16K). At 64K the naive kernel is already at 63%, so there is
+less left to gain, which matches the small 1.14x speedup above.
 
 ### Energy conservation
 
-| integrator | dt | steps | final ΔE/E₀ | max abs(ΔE/E₀) |
-|---|--:|--:|--:|--:|
-| KDK leapfrog | 0.01 | 2000 | +5.91e-02 | 6.09e-02 |
-| KDK leapfrog | 0.005 | 4000 | -7.94e-04 | 8.86e-04 |
-| KDK leapfrog | 0.0025 | 8000 | -1.95e-04 | 2.60e-04 |
-| semi-implicit Euler | 0.01 | 2000 | +9.11e-02 | 9.11e-02 |
-| semi-implicit Euler | 0.005 | 4000 | +3.04e-04 | 7.33e-03 |
-| semi-implicit Euler | 0.0025 | 8000 | +1.43e-03 | 2.58e-03 |
+![Energy error over time](results/energy.png)
 
-![Energy drift vs time](results/energy.png)
+Largest energy error during a run of 1,024 stars for 20 time units:
 
-### Barnes–Hut vs direct summation (CPU)
+| time step dt | KDK | Euler |
+|--:|--:|--:|
+| 0.01 | 6.1% | 9.1% |
+| 0.005 | 0.089% | 0.73% |
+| 0.0025 | 0.026% | 0.26% |
 
-| N | direct, 1 thread | Barnes–Hut, 1 thread | direct, OpenMP | Barnes–Hut, OpenMP | BH force error (RMS) |
-|---|--:|--:|--:|--:|--:|
-| 256 | 0.026 | 0.184 | 0.017 | 0.089 | 0.41 % |
-| 512 | 0.098 | 0.490 | 0.032 | 0.151 | 0.49 % |
-| 1K | 0.374 | 1.557 | 0.078 | 0.383 | 0.80 % |
-| 2K | 1.479 | 4.057 | 0.236 | 0.861 | 0.90 % |
-| 4K | 5.820 | 9.665 | 0.835 | 1.869 | 0.90 % |
-| 8K | 23.1 | 26.0 | 3.082 | 4.572 | 1.07 % |
-| 16K | 92.2 | 73.9 | 11.8 | 11.7 | 1.12 % |
-| 32K | 369.4 | 190.8 | 47.6 | 28.5 | 1.09 % |
-| 64K | 1,490.6 | 506.9 | 189.0 | 72.6 | 1.09 % |
-| 128K | 5,956.8 | 1,226.5 | 755.9 | 168.5 | 1.11 % |
+- **KDK is about 10x more accurate than Euler** once the time step is small
+  enough.
+- **The default dt = 0.01 is too big for accurate work.** Stars that pass
+  close to the black hole move too far in one step. Use
+  `./build/galaxy_nbody 4096 20000 kdk 0.0025` when accuracy matters.
 
-ms per step. **Crossover** (Barnes–Hut faster than direct summation on the same threads): 1 thread **N ≈ 10,459**, OpenMP **N ≈ 16,122**.
+---
 
-![Barnes–Hut crossover](results/bh_crossover.png)
+## 6. How the code is organised
 
-<!-- RESULTS:END -->
+![Code map](images/06-code-map.svg)
 
-### Reading the results
+```
+src/                      THE SIMULATION
+  types.h                   Vec4 and the softening constant
+  galaxy.h / .cpp           builds the starting galaxy
+  cpu_nbody.h / .cpp        CPU version: forces, Euler step, KDK step, energy
+  gpu_nbody.h / .cu         GPU version: naive kernel, tiled kernel, kick, drift
+  main.cu                   runs the galaxy on the GPU, writes simulation.bin
 
-- **Direct sum on the CPU is a strong baseline.** The single-thread code is
-  SIMD-vectorised (AVX2 on the test machine), so "speedup vs serial" for
-  the GPU means speedup over a vectorised core, not over scalar code. CPU and
-  GPU numbers come from the same container, so the speedups are same-host.
-- **The GPU wins from N ≈ 4K and the gap grows with N.** At N = 1K the launch
-  overhead dominates and 8 OpenMP threads beat the naive kernel. At N = 64K
-  the tiled kernel takes 8.0 ms per step: 187× the vectorised serial code and
-  24× the 8-thread OpenMP code. Peak throughput is about 12,200 GFLOP/s
-  (N = 64K, block 128).
-- **Shared-memory tiling pays most at mid N.** Tiled is 2.2–2.6× faster than
-  naive from 1K to 16K, but only 1.14× at 64K. Nsight Compute shows what
-  tiling changes: global loads through L1 fall 16× (4.30 GB → 0.27 GB per
-  force evaluation at 64K) and are replaced by shared-memory accesses, and
-  compute throughput rises from 19 % to 49 % of peak at 16K. At 64K the naive
-  kernel already reaches 63 % of peak compute, so there is less left to gain.
-- **Block size matters more for the tiled kernel.** The tile is one block, so
-  block size sets how many bodies sit in shared memory. 128 is best or near
-  best at most N; 512 is always the slowest tiled choice, up to 2.3× slower.
-- **Energy drift on the GPU matches the CPU.** The ΔE/E₀ column is identical
-  for the naive and tiled kernels at every N: they compute the same forces.
-- **Energy drift is set by the timestep, not by the parallelisation.** At the
-  default `dt = 0.01` both integrators drift by several percent over 20 time
-  units, because bulge stars that pass the softened black hole have an orbital
-  timescale √(ε³/M_bh) ≈ 0.013, about one step. Once dt resolves that
-  (0.005 and below), both schemes stop drifting secularly, since both are
-  symplectic, and the error becomes a bounded oscillation. KDK's oscillation
-  shrinks about 4–8× per halving of dt (second order), while Euler's shrinks
-  only about 2× (first order). At dt = 0.0025, KDK stays near 10⁻⁴ and Euler
-  near 10⁻³. For quantitative runs, use `--dt 0.0025` or a larger softening.
-- **Barnes–Hut** has a fixed cost per body (tree build, stack traversal) that is
-  far higher than one vectorised direct interaction, so it only wins at fairly
-  large N: N ≈ 10K on one thread and N ≈ 16K on 8 threads. Against the GPU
-  direct kernel the crossover is beyond the measured range: at N = 64K the
-  tiled GPU kernel (8.0 ms) is still 9× faster than 8-thread Barnes–Hut
-  (72.6 ms), which also carries a ~1 % force error.
-- **Caveats.** Everything was measured in a Modal cloud container (A100-SXM4-40GB,
-  8 reserved cores of a 24-core AMD host; the sandbox hides the CPU model
-  name). Timings on shared hardware vary by roughly ±20 % between runs. Nsight
-  Compute ran with `--clock-control none` because the container cannot lock
-  GPU clocks, so its single-launch kernel times are noisier than the benchmark
-  averages (at 64K it timed tiled slower than naive, the opposite of the
-  20-step average); the stall metrics were not reported by this ncu version.
+bench/                    THE STOPWATCH
+  bench_cpu.cpp             times the CPU version
+  bench_gpu.cu              times the GPU version
+  check_gpu.cu              checks that GPU forces match CPU forces
+  energy_drift.cpp          measures the energy error of KDK and Euler
+  run_benchmarks.sh         runs all of the above, writes results/*.csv
+  profile_ncu.sh            Nsight Compute profile of the two GPU kernels
+  modal_bench.py            runs everything on a rented cloud GPU (Modal)
+
+plots/                    THE PICTURES
+  plot_results.py           results/*.csv -> charts and a Markdown table
+  visualize.py              simulation.bin -> galaxy animation
+
+results/                  numbers (.csv) and charts (.png)
+images/                   the diagrams in this README
+```
+
+## 7. Reproduce the results
+
+On a machine with an NVIDIA GPU:
+
+```bash
+bash bench/run_benchmarks.sh
+```
+
+```bash
+bash bench/profile_ncu.sh
+```
+
+```bash
+python3 plots/plot_results.py
+```
+
+Or on a rented GPU with [Modal](https://modal.com):
+
+```bash
+modal run bench/modal_bench.py
+```
+
+Each benchmark program can also be run by hand:
+
+```bash
+./build/bench_gpu tiled 65536 256 30
+```
+
+```bash
+./build/bench_cpu omp 16384 10
+```
+
+```bash
+./build/energy_drift kdk 0.005
+```
+
+```bash
+./build/check_gpu
+```
+
+## 8. Good to know
+
+- Timings come from a shared cloud machine and vary by roughly 20% from run
+  to run.
+- The simulation uses single precision (`float`). Only the energy check uses
+  `double`.
+- This is "direct summation": simple and exact, but the N x N cost limits it
+  to around 100K stars. Larger simulations use tree or grid methods.
