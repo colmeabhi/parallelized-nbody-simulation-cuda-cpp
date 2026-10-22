@@ -44,3 +44,7 @@ venv/
 *.swo
 *~
 .DS_Store
+
+# editor
+.vscode/
+.DS_Store
