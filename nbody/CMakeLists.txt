@@ -55,6 +55,9 @@ if(CMAKE_CUDA_COMPILER)
     target_link_libraries(galaxy_nbody PRIVATE nbody_gpu)
     target_compile_options(galaxy_nbody PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:${NBODY_CUDA_FLAGS}>)
 
+    add_executable(nbody_bench_gpu src/bench_gpu.cu)
+    target_link_libraries(nbody_bench_gpu PRIVATE nbody_gpu)
+    target_compile_options(nbody_bench_gpu PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:${NBODY_CUDA_FLAGS}>)
 else()
     message(WARNING "No CUDA compiler found: building only the CPU targets "
                     "(nbody_bench_cpu).")

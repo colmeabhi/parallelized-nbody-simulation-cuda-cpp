@@ -37,8 +37,11 @@ g++ -std=c++17 -O3 -fopenmp -I src src/bench_cpu.cpp $CPU_OBJS -o nbody_bench_cp
 
 nvcc $NVFLAGS -Xcompiler -fopenmp src/main.cu src/galaxy_simulation.cu \
      src/nbody_kernel.cu $CPU_OBJS -o galaxy_nbody
+nvcc $NVFLAGS -Xcompiler -fopenmp src/bench_gpu.cu src/nbody_kernel.cu \
+     $CPU_OBJS -o nbody_bench_gpu
+
 echo ""
-echo "Build successful → ./galaxy_nbody  ./nbody_bench_cpu"
+echo "Build successful → ./galaxy_nbody  ./nbody_bench_gpu  ./nbody_bench_cpu"
 echo "Run   → ./galaxy_nbody [n_bodies] [n_steps] [--integrator kdk|euler]"
 echo "Bench → ../scripts/run_benchmarks.sh"
 echo "Plot  → python3 visualize.py simulation.bin [out.gif]"
