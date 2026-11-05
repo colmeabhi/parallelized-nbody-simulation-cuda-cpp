@@ -1,5 +1,7 @@
 # Parallel N-Body Simulation (CUDA + C++/OpenMP)
 
+[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/colmeabhi/parallelized-nbody-simulation-cuda-cpp/blob/main/notebooks/colab_gpu_benchmarks.ipynb)
+
 GPU-accelerated N-body gravitational simulation of a Milky Way-like galaxy,
 with CPU baselines, energy-conservation checks, benchmarks and profiling.
 
@@ -36,6 +38,7 @@ timings and energy figures compare like with like.
 │   ├── run_benchmarks.sh               all benchmarks → results/*.csv
 │   ├── profile_ncu.sh                  Nsight Compute naive vs tiled → results/ncu_metrics.csv
 │   └── make_report.py                  results/*.csv → charts + the section below
+├── notebooks/colab_gpu_benchmarks.ipynb  run it all on a free Colab GPU
 └── results/                            measured data and charts
 ```
 
@@ -47,6 +50,8 @@ cmake -S . -B build && cmake --build build -j
 ./build/galaxy_nbody                 # 4096 bodies, 5000 KDK steps → simulation.bin, energy.csv
 python3 visualize.py simulation.bin
 ```
+
+No GPU? [`notebooks/colab_gpu_benchmarks.ipynb`](notebooks/colab_gpu_benchmarks.ipynb) builds and benchmarks everything on a free Colab T4 (badge above).
 
 Reproduce every number below (GPU sections run only if a GPU is visible):
 
