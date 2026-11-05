@@ -1,0 +1,563 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Live in-browser galaxy N-body simulation, the CUDA race fix, KDK vs Euler energy drift, and measured CPU and Barnes-Hut benchmarks.">
+<style>
+/* Base reset (matches the claude.ai artifact skeleton this page was first published in) */
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; }
+img { max-width: 100%; }
+[hidden] { display: none !important; }
+</style>
+<title>Galaxy N-Body Lab</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one reading column (~70ch) with a full-bleed "observatory" band for the live sim,
+   followed by evidence sections (race fix, integrator, benchmarks, Barnes–Hut). */
+:root {
+  --bg: #f5f6f8;          /* cool paper */
+  --surface: #ffffff;
+  --ink: #12161f;
+  --ink-2: #4a5160;
+  --ink-3: #737b8a;
+  --rule: #dde1e8;
+  --accent: #b86a0b;      /* black-hole amber */
+  --s1: #2a78d6;          /* series: serial / KDK */
+  --s2: #eb6834;          /* series: OpenMP / Euler */
+  --good: #1e8a57;
+  --bad: #c13d3d;
+  --space: #070a12;       /* sim viewport, single-look */
+  --space-ink: #c9d3e6;
+  --f-display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --f-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0d1017; --surface: #151a24; --ink: #e8ecf3; --ink-2: #b3bbca; --ink-3: #8a93a5;
+    --rule: #262d3b; --accent: #f0a640; --s1: #3987e5; --s2: #d95926; --good: #45b883; --bad: #e66767;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0d1017; --surface: #151a24; --ink: #e8ecf3; --ink-2: #b3bbca; --ink-3: #8a93a5;
+  --rule: #262d3b; --accent: #f0a640; --s1: #3987e5; --s2: #d95926; --good: #45b883; --bad: #e66767;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink);
+  font: 16px/1.6 var(--f-body);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 64px;
+}
+.wrap { max-width: 1080px; margin: 0 auto; display: grid; gap: 56px; }
+.col { max-width: 70ch; }
+h1, h2, h3 { font-family: var(--f-display); text-wrap: balance; line-height: 1.1; margin: 0; }
+h1 { font-size: clamp(2.2rem, 5vw, 3.6rem); font-weight: 700; letter-spacing: -0.02em; }
+h2 { font-size: clamp(1.5rem, 3vw, 2rem); font-weight: 700; letter-spacing: -0.01em; }
+h3 { font-size: 1.1rem; font-weight: 500; }
+p { margin: 0; color: var(--ink-2); }
+.stack { display: grid; gap: 14px; }
+.eyebrow { font: 500 0.75rem/1 var(--f-mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); }
+code, .mono { font-family: var(--f-mono); font-size: 0.9em; }
+code { background: color-mix(in srgb, var(--ink) 7%, transparent); padding: 1px 5px; border-radius: 4px; }
+a { color: var(--s1); }
+a:focus-visible, button:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* hero */
+header { padding-top: 48px; display: grid; gap: 18px; }
+.lede { font-size: 1.15rem; max-width: 62ch; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { font: 500 0.78rem/1 var(--f-mono); padding: 7px 10px; border: 1px solid var(--rule); border-radius: 999px; color: var(--ink-2); background: var(--surface); }
+
+/* observatory */
+.obs { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 0; border-radius: 14px; overflow: hidden; background: var(--space); color: var(--space-ink); box-shadow: 0 20px 50px -30px rgba(0,0,0,.6); }
+.view { position: relative; min-height: 420px; aspect-ratio: 4 / 3; max-width: 100%; }
+canvas#sky { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: grab; touch-action: none; }
+canvas#sky:active { cursor: grabbing; }
+.hud { position: absolute; left: 14px; bottom: 12px; font: 400 0.75rem/1.5 var(--f-mono); color: #8e9bb5; pointer-events: none; }
+.panel { padding: 20px; display: grid; gap: 18px; align-content: start; border-left: 1px solid #1c2333; background: #0b0f19; }
+.panel label, .panel .lbl { font: 500 0.7rem/1 var(--f-mono); letter-spacing: 0.1em; text-transform: uppercase; color: #8e9bb5; display: block; margin-bottom: 8px; }
+.seg { display: flex; border: 1px solid #2a3348; border-radius: 8px; overflow: hidden; }
+.seg button { flex: 1; background: transparent; color: #c9d3e6; border: 0; padding: 8px 6px; font: 500 0.82rem/1 var(--f-body); cursor: pointer; }
+.seg button + button { border-left: 1px solid #2a3348; }
+.seg button[aria-pressed="true"] { background: #f0a640; color: #1a1205; }
+.row { display: flex; gap: 8px; }
+.btn { flex: 1; background: #1a2131; color: #e2e8f4; border: 1px solid #2a3348; border-radius: 8px; padding: 9px; font: 500 0.85rem/1 var(--f-body); cursor: pointer; }
+.btn:hover { background: #222b3f; }
+.readout { display: grid; gap: 4px; }
+.big { font: 500 1.6rem/1.1 var(--f-mono); font-variant-numeric: tabular-nums; color: #f3f6fb; }
+.sub { font: 400 0.75rem/1.4 var(--f-mono); color: #8e9bb5; }
+canvas#spark { width: 100%; height: 64px; display: block; }
+.note { font-size: 0.82rem; color: #9aa6bd; line-height: 1.5; }
+
+/* race diagram */
+.compare { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; }
+.card { background: var(--surface); border: 1px solid var(--rule); border-radius: 12px; padding: 20px; display: grid; gap: 14px; min-width: 0; }
+.tag { justify-self: start; font: 500 0.72rem/1 var(--f-mono); padding: 5px 8px; border-radius: 6px; }
+.tag.bad { color: var(--bad); background: color-mix(in srgb, var(--bad) 12%, transparent); }
+.tag.good { color: var(--good); background: color-mix(in srgb, var(--good) 12%, transparent); }
+.lanes { display: grid; gap: 8px; font: 400 0.8rem/1.3 var(--f-mono); }
+.lane { display: grid; grid-template-columns: 64px 1fr; gap: 8px; align-items: center; }
+.lane .who { color: var(--ink-3); }
+.bar { display: flex; gap: 3px; min-width: 0; }
+.seg-r, .seg-w, .seg-k { padding: 6px 8px; border-radius: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.seg-r { background: color-mix(in srgb, var(--s1) 18%, transparent); color: var(--ink); }
+.seg-w { background: color-mix(in srgb, var(--bad) 22%, transparent); color: var(--ink); }
+.seg-k { background: color-mix(in srgb, var(--good) 18%, transparent); color: var(--ink); }
+.barrier { border-top: 2px dashed var(--ink-3); margin: 2px 0; position: relative; }
+.barrier span { position: absolute; right: 0; top: -9px; background: var(--surface); padding: 0 6px; font-size: 0.7rem; color: var(--ink-3); }
+
+/* math */
+.eqs { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 20px; }
+.eq { font: 400 0.92rem/1.9 var(--f-mono); color: var(--ink); }
+.eq b { font-weight: 500; color: var(--accent); }
+
+/* tables + charts */
+.tbl { overflow-x: auto; border: 1px solid var(--rule); border-radius: 12px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 0.9rem; font-variant-numeric: tabular-nums; }
+th, td { padding: 9px 14px; text-align: right; border-bottom: 1px solid var(--rule); white-space: nowrap; }
+th:first-child, td:first-child { text-align: left; }
+th { font: 500 0.72rem/1.2 var(--f-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-3); }
+tr:last-child td { border-bottom: 0; }
+td.win { color: var(--good); font-weight: 600; }
+.charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
+.chart { background: var(--surface); border: 1px solid var(--rule); border-radius: 12px; padding: 16px; display: grid; gap: 8px; min-width: 0; }
+.chart svg { width: 100%; height: auto; display: block; overflow: visible; }
+.legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 0.8rem; color: var(--ink-2); }
+.legend i { display: inline-block; width: 16px; height: 2px; vertical-align: middle; margin-right: 6px; }
+.legend i.dash { background: none !important; border-top: 2px dashed; height: 0; }
+.tip { position: fixed; pointer-events: none; background: var(--ink); color: var(--bg); font: 500 0.75rem/1.3 var(--f-mono); padding: 6px 8px; border-radius: 6px; z-index: 20; }
+.callout { border-left: 3px solid var(--accent); padding: 4px 0 4px 16px; }
+.pending { font: 400 0.85rem/1.5 var(--f-body); color: var(--ink-2); background: var(--surface); border: 1px dashed var(--rule); border-radius: 12px; padding: 16px 18px; }
+footer { color: var(--ink-3); font-size: 0.85rem; border-top: 1px solid var(--rule); padding-top: 20px; }
+
+@media (max-width: 760px) {
+  .obs { grid-template-columns: 1fr; }
+  .panel { border-left: 0; border-top: 1px solid #1c2333; }
+  .view { aspect-ratio: 1 / 1; min-height: 0; }
+}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <span class="eyebrow">CUDA · C++ · OpenMP · Barnes–Hut</span>
+    <h1>Galaxy N-Body Lab</h1>
+    <p class="lede">A Milky-Way-like disk of stars around a central black hole, integrated by direct
+      O(N²) gravity on the GPU and checked against three CPU solvers. Below is the same model running
+      live in your browser, followed by the bug that was fixed, the integrator change, and the
+      measured numbers.</p>
+    <div class="chips">
+      <span class="chip">1 black hole + disk + bulge</span>
+      <span class="chip">Plummer ε = 0.02</span>
+      <span class="chip">kick-drift-kick leapfrog</span>
+      <span class="chip">G = 1, M = 1, R = 1</span>
+    </div>
+  </header>
+
+  <section class="obs" aria-label="Live simulation">
+    <div class="view">
+      <canvas id="sky" aria-label="Galaxy simulation, drag to rotate"></canvas>
+      <div class="hud" id="hud">t = 0.00 · 0 steps</div>
+    </div>
+    <div class="panel">
+      <div>
+        <span class="lbl">Integrator</span>
+        <div class="seg" role="group" aria-label="Integrator">
+          <button id="int-kdk" aria-pressed="true">KDK leapfrog</button>
+          <button id="int-euler" aria-pressed="false">Euler</button>
+        </div>
+      </div>
+      <div>
+        <span class="lbl">Timestep dt</span>
+        <div class="seg" role="group" aria-label="Timestep">
+          <button data-dt="0.01" aria-pressed="true">0.01</button>
+          <button data-dt="0.005" aria-pressed="false">0.005</button>
+          <button data-dt="0.0025" aria-pressed="false">0.0025</button>
+        </div>
+      </div>
+      <div>
+        <span class="lbl">Bodies N</span>
+        <div class="seg" role="group" aria-label="Number of bodies">
+          <button data-n="1024" aria-pressed="false">1K</button>
+          <button data-n="2048" aria-pressed="true">2K</button>
+          <button data-n="4096" aria-pressed="false">4K</button>
+        </div>
+      </div>
+      <div class="row">
+        <button class="btn" id="pause">Pause</button>
+        <button class="btn" id="reset">Restart</button>
+      </div>
+      <div class="readout">
+        <span class="lbl">Energy drift ΔE / E₀</span>
+        <span class="big" id="drift">+0.000 %</span>
+        <canvas id="spark" aria-label="Energy drift over time"></canvas>
+        <span class="sub" id="perf">— interactions/s in JS</span>
+      </div>
+      <p class="note">Same physics as the CUDA code, running on one CPU thread of your device.
+        Try dt = 0.01 and watch the drift grow, then 0.0025. The disk is cold (4 % velocity spread) and gravitationally unstable, so it breaks into clumps within an orbit, in the CUDA code too.</p>
+    </div>
+  </section>
+
+  <section class="stack">
+    <span class="eyebrow">Bug fix</span>
+    <h2>The race in the original kernel</h2>
+    <p class="col">The first version computed forces and updated positions in one kernel. CUDA runs blocks in no
+      fixed order, so block 0 could overwrite <code>pos[]</code> while block 7 was still reading it.
+      Some bodies felt their neighbours at time t, others at t + dt, and results depended on
+      scheduling. The fix splits the step so that no kernel reads an array that the same kernel writes.</p>
+    <div class="compare">
+      <div class="card">
+        <span class="tag bad">Before · one fused kernel</span>
+        <div class="lanes" aria-hidden="true">
+          <div class="lane"><span class="who">block 0</span><div class="bar"><span class="seg-r" style="flex:3">read pos[ ]</span><span class="seg-w" style="flex:2">write pos[0..255]</span></div></div>
+          <div class="lane"><span class="who">block 7</span><div class="bar"><span class="seg-r" style="flex:4">read pos[ ] … stale or new?</span><span class="seg-w" style="flex:1">write</span></div></div>
+        </div>
+        <p>Block 7's reads overlap block 0's writes. Nothing in the kernel orders them.</p>
+      </div>
+      <div class="card">
+        <span class="tag good">After · two kernels per step</span>
+        <div class="lanes" aria-hidden="true">
+          <div class="lane"><span class="who">kernel 1</span><div class="bar"><span class="seg-k" style="flex:1">v += a·dt/2 ;  x += v·dt  (own body only)</span></div></div>
+          <div class="barrier"><span>launch boundary = grid-wide barrier</span></div>
+          <div class="lane"><span class="who">kernel 2</span><div class="bar"><span class="seg-r" style="flex:1">a = F(x) reads all x ;  v += a·dt/2</span></div></div>
+        </div>
+        <p>Positions change only in kernel 1. Every block finishes before kernel 2 reads them.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="stack">
+    <span class="eyebrow">Integrator</span>
+    <h2>Euler was posing as leapfrog</h2>
+    <p class="col">The old update <code>v += a·dt; x += v·dt</code> is semi-implicit Euler: symplectic, but first order.
+      It is now a real kick-drift-kick leapfrog, which is second order and time-reversible and still costs one
+      force evaluation per step, because the acceleration at the end of a step is reused at the start of the next.</p>
+    <div class="eqs">
+      <div class="card">
+        <h3>Semi-implicit Euler</h3>
+        <div class="eq">v<sub>n+1</sub> = v<sub>n</sub> + a(x<sub>n</sub>)·dt<br>x<sub>n+1</sub> = x<sub>n</sub> + v<sub>n+1</sub>·dt</div>
+        <p>Spring a = −x, dt = 0.1, from x = 1: x₁ = 0.99000 (error 5·10⁻³)</p>
+      </div>
+      <div class="card">
+        <h3>Kick-drift-kick leapfrog</h3>
+        <div class="eq">v<sub>½</sub> = v<sub>n</sub> + a(x<sub>n</sub>)·<b>dt/2</b><br>x<sub>n+1</sub> = x<sub>n</sub> + v<sub>½</sub>·dt<br>v<sub>n+1</sub> = v<sub>½</sub> + a(x<sub>n+1</sub>)·<b>dt/2</b></div>
+        <p>Same spring: x₁ = 0.99500 vs exact cos 0.1 = 0.99500 (error 5·10⁻⁶)</p>
+      </div>
+    </div>
+    <div class="tbl" role="region" aria-label="Energy drift table" tabindex="0">
+      <table>
+        <thead><tr><th>dt</th><th>KDK final ΔE/E₀</th><th>KDK max</th><th>Euler final ΔE/E₀</th><th>Euler max</th></tr></thead>
+        <tbody>
+          <tr><td>0.01</td><td>+5.30e-2</td><td>5.78e-2</td><td>+8.56e-2</td><td>8.56e-2</td></tr>
+          <tr><td>0.005</td><td class="win">−1.38e-3</td><td class="win">1.93e-3</td><td>−2.32e-3</td><td>6.12e-3</td></tr>
+          <tr><td>0.0025</td><td class="win">−1.45e-4</td><td class="win">2.69e-4</td><td>−1.04e-3</td><td>2.85e-3</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="col callout">N = 1024, 20 time units. At dt = 0.01 both schemes drift by percents. Bulge stars passing the
+      softened black hole orbit on a timescale √(ε³/M<sub>BH</sub>) ≈ 0.013, about one step. Once dt resolves that, KDK's
+      error falls about 7× per halving and Euler's about 2×.</p>
+  </section>
+
+  <section class="stack">
+    <span class="eyebrow">Benchmarks</span>
+    <h2>Direct summation on the CPU</h2>
+    <p class="col">Time per step for N² interactions, on a 4-core Intel Xeon at 2.1 GHz. The serial baseline is
+      already vectorised with AVX-512, so it is a demanding reference.</p>
+    <div class="charts">
+      <figure class="chart" style="margin:0">
+        <h3>Time per step (ms, log scale)</h3>
+        <div class="legend"><span><i style="background:var(--s1)"></i>1 thread</span><span><i style="background:var(--s2)"></i>OpenMP, 4 threads</span></div>
+        <svg id="c-scaling" viewBox="0 0 420 260" role="img" aria-label="Time per step versus N for serial and OpenMP"></svg>
+      </figure>
+      <div class="tbl" role="region" aria-label="CPU scaling table" tabindex="0" style="align-self:start">
+        <table>
+          <thead><tr><th>N</th><th>1 thread</th><th>OpenMP</th><th>speedup</th><th>OpenMP GFLOP/s</th></tr></thead>
+          <tbody>
+            <tr><td>1,024</td><td>0.50 ms</td><td>0.15 ms</td><td>3.4×</td><td>141</td></tr>
+            <tr><td>4,096</td><td>4.55 ms</td><td>1.77 ms</td><td>2.6×</td><td>190</td></tr>
+            <tr><td>16,384</td><td>76.4 ms</td><td>29.7 ms</td><td>2.6×</td><td>181</td></tr>
+            <tr><td>65,536</td><td>1,447 ms</td><td>380 ms</td><td>3.8×</td><td>226</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="pending"><strong>GPU numbers:</strong> the naive and tiled CUDA kernels, the block-size sweep
+      (64–512) and the Nsight Compute profile come from <code>scripts/run_benchmarks.sh</code> and
+      <code>scripts/profile_ncu.sh</code> on an NVIDIA GPU. The repo includes a Colab notebook that runs them
+      on a free T4.</div>
+  </section>
+
+  <section class="stack">
+    <span class="eyebrow">Algorithm</span>
+    <h2>When does Barnes–Hut beat brute force?</h2>
+    <p class="col">An octree groups distant stars into one pseudo-mass (opening angle θ = 0.5), turning O(N²)
+      into O(N log N) for about 1 % force error. Each body costs much more than one vectorised direct
+      interaction, so the tree only wins past a crossover.</p>
+    <div class="charts">
+      <figure class="chart" style="margin:0">
+        <h3>Time per step (ms, log scale)</h3>
+        <div class="legend">
+          <span><i style="background:var(--s1)"></i>direct, 1 thread</span>
+          <span><i class="dash" style="border-color:var(--s1)"></i>Barnes–Hut, 1 thread</span>
+          <span><i style="background:var(--s2)"></i>direct, OpenMP</span>
+          <span><i class="dash" style="border-color:var(--s2)"></i>Barnes–Hut, OpenMP</span>
+        </div>
+        <svg id="c-bh" viewBox="0 0 420 260" role="img" aria-label="Barnes-Hut versus direct time per step"></svg>
+      </figure>
+      <div class="stack" style="align-content:start">
+        <div class="card">
+          <span class="lbl mono" style="color:var(--ink-3);font-size:.72rem;letter-spacing:.1em;text-transform:uppercase">Crossover N</span>
+          <div style="display:flex;gap:28px;flex-wrap:wrap">
+            <div><div class="mono" style="font-size:1.8rem;color:var(--ink)">≈ 17,100</div><p>1 thread</p></div>
+            <div><div class="mono" style="font-size:1.8rem;color:var(--ink)">≈ 12,700</div><p>OpenMP, 4 threads</p></div>
+          </div>
+          <p>At N = 131,072 the tree is 4.2× faster than direct summation on 1 thread and 3.8× faster on 4, with 1.1 % RMS force error.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    Source: <a href="https://github.com/colmeabhi/parallelized-nbody-simulation-cuda-cpp" target="_blank" rel="noopener">colmeabhi/parallelized-nbody-simulation-cuda-cpp</a>.
+    The browser simulation uses the same galaxy model, softening and integrators as the C++/CUDA code;
+    its random draws differ from the C++ generator.
+  </footer>
+</div>
+<div class="tip" id="tip" hidden></div>
+
+<script>
+(() => {
+  "use strict";
+  // ─── Simulation (mirrors nbody/src: galaxy_ics.cpp + cpu_nbody.cpp) ─────────
+  const EPS2 = 0.02 * 0.02;
+  let N = 2048, dt = 0.01, integ = "kdk";
+  let x, y, z, m, vx, vy, vz, ax, ay, az, kind, accValid, t, steps, E0, drift = [];
+
+  function rng(seed) {                       // mulberry32
+    return () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+      let r = Math.imul(seed ^ seed >>> 15, 1 | seed);
+      r = r + Math.imul(r ^ r >>> 7, 61 | r) ^ r; return ((r ^ r >>> 14) >>> 0) / 4294967296; };
+  }
+  function init() {
+    const R = rng(42), U = (a, b) => a + (b - a) * R();
+    const G = (mu, s) => mu + s * Math.sqrt(-2 * Math.log(1 - R())) * Math.cos(2 * Math.PI * R());
+    x = new Float64Array(N); y = new Float64Array(N); z = new Float64Array(N); m = new Float64Array(N);
+    vx = new Float64Array(N); vy = new Float64Array(N); vz = new Float64Array(N);
+    ax = new Float64Array(N); ay = new Float64Array(N); az = new Float64Array(N); kind = new Uint8Array(N);
+    const Mbh = 0.05, Md = 0.95, star = Md / (N - 1), nB = Math.floor(N * 0.1), nD = N - 1 - nB, Rb = 0.12;
+    const menc = r => Mbh + Md * (r < 1 ? r * r : 1), vc = r => r > 1e-6 ? Math.sqrt(menc(r) / r) : 0;
+    m[0] = Mbh; kind[0] = 2;
+    for (let i = 1; i <= nD; i++) {
+      const r = Math.sqrt(U(0.0025, 1)), th = U(0, 2 * Math.PI);
+      x[i] = r * Math.cos(th); y[i] = r * Math.sin(th); z[i] = G(0, 0.02); m[i] = star;
+      const v = vc(r), d = 0.04 * v;
+      vx[i] = -v * Math.sin(th) + G(0, d); vy[i] = v * Math.cos(th) + G(0, d); vz[i] = G(0, d * 0.2);
+    }
+    for (let i = nD + 1; i < N; i++) {
+      const r = Rb * Math.cbrt(U(1e-3, 1)), th = U(0, 2 * Math.PI), ph = Math.acos(U(-1, 1));
+      x[i] = r * Math.sin(ph) * Math.cos(th); y[i] = r * Math.sin(ph) * Math.sin(th); z[i] = r * Math.cos(ph);
+      m[i] = star; kind[i] = 1;
+      const vm = Math.abs(G(0, 0.5 * vc(r))), a = U(0, 2 * Math.PI), b = Math.acos(U(-1, 1));
+      vx[i] = vm * Math.sin(b) * Math.cos(a); vy[i] = vm * Math.sin(b) * Math.sin(a); vz[i] = vm * Math.cos(b);
+    }
+    accValid = false; t = 0; steps = 0; drift = []; E0 = energy();
+  }
+  function accel() {
+    for (let i = 0; i < N; i++) {
+      const xi = x[i], yi = y[i], zi = z[i]; let sx = 0, sy = 0, sz = 0;
+      for (let j = 0; j < N; j++) {
+        const dx = x[j] - xi, dy = y[j] - yi, dz = z[j] - zi;
+        const r2 = dx * dx + dy * dy + dz * dz + EPS2, inv = 1 / Math.sqrt(r2), s = m[j] * inv * inv * inv;
+        sx += dx * s; sy += dy * s; sz += dz * s;
+      }
+      ax[i] = sx; ay[i] = sy; az[i] = sz;
+    }
+    accValid = true;
+  }
+  function step() {
+    if (integ === "kdk") {
+      if (!accValid) accel();
+      const h = dt / 2;
+      for (let i = 0; i < N; i++) { vx[i] += ax[i] * h; vy[i] += ay[i] * h; vz[i] += az[i] * h;
+        x[i] += vx[i] * dt; y[i] += vy[i] * dt; z[i] += vz[i] * dt; }
+      accel();
+      for (let i = 0; i < N; i++) { vx[i] += ax[i] * h; vy[i] += ay[i] * h; vz[i] += az[i] * h; }
+    } else {
+      accel();
+      for (let i = 0; i < N; i++) { vx[i] += ax[i] * dt; vy[i] += ay[i] * dt; vz[i] += az[i] * dt;
+        x[i] += vx[i] * dt; y[i] += vy[i] * dt; z[i] += vz[i] * dt; }
+      accValid = false;
+    }
+    t += dt; steps++;
+  }
+  function energy() {
+    let ke = 0, pe = 0;
+    for (let i = 0; i < N; i++) {
+      ke += 0.5 * m[i] * (vx[i] * vx[i] + vy[i] * vy[i] + vz[i] * vz[i]);
+      for (let j = i + 1; j < N; j++) {
+        const dx = x[j] - x[i], dy = y[j] - y[i], dz = z[j] - z[i];
+        pe -= m[i] * m[j] / Math.sqrt(dx * dx + dy * dy + dz * dz + EPS2);
+      }
+    }
+    return ke + pe;
+  }
+
+  // ─── Rendering ─────────────────────────────────────────────────────────────
+  const sky = document.getElementById("sky"), ctx = sky.getContext("2d");
+  const spark = document.getElementById("spark"), sctx = spark.getContext("2d");
+  let W = 0, H = 0, dpr = 1, yaw = 0.4, tilt = 1.05, dragging = false, lx = 0, ly = 0;
+  function resize() {
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const r = sky.getBoundingClientRect(); W = r.width; H = r.height;
+    sky.width = Math.round(W * dpr); sky.height = Math.round(H * dpr);
+    const s = spark.getBoundingClientRect();
+    spark.width = Math.round(s.width * dpr); spark.height = Math.round(s.height * dpr);
+    draw(); drawSpark();
+  }
+  const COLORS = ["rgba(170,200,255,0.85)", "rgba(255,196,140,0.9)", "#ffcf6b"];
+  function draw() {
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.globalCompositeOperation = "source-over";
+    ctx.fillStyle = "#070a12"; ctx.fillRect(0, 0, W, H);
+    ctx.globalCompositeOperation = "lighter";
+    const sc = Math.min(W, H) * 0.42, cx = W / 2, cy = H / 2;
+    const cyw = Math.cos(yaw), syw = Math.sin(yaw), ct = Math.cos(tilt), st = Math.sin(tilt);
+    const sz = N > 3000 ? 1.3 : 1.7;
+    for (let k = 0; k < 2; k++) {
+      ctx.fillStyle = COLORS[k];
+      for (let i = 1; i < N; i++) {
+        if (kind[i] !== k) continue;
+        const X = x[i] * cyw - y[i] * syw, Y0 = x[i] * syw + y[i] * cyw;
+        const Y = Y0 * ct - z[i] * st, Z = Y0 * st + z[i] * ct;
+        const p = 3 / (3 + Z);
+        ctx.fillRect(cx + X * sc * p, cy + Y * sc * p, sz, sz);
+      }
+    }
+    const X = x[0] * cyw - y[0] * syw, Y0 = x[0] * syw + y[0] * cyw, Y = Y0 * ct - z[0] * st;
+    const g = ctx.createRadialGradient(cx + X * sc, cy + Y * sc, 0, cx + X * sc, cy + Y * sc, 14);
+    g.addColorStop(0, "rgba(255,214,120,0.95)"); g.addColorStop(1, "rgba(255,170,60,0)");
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx + X * sc, cy + Y * sc, 14, 0, Math.PI * 2); ctx.fill();
+  }
+  function drawSpark() {
+    const w = spark.width, h = spark.height;
+    sctx.setTransform(1, 0, 0, 1, 0, 0); sctx.clearRect(0, 0, w, h);
+    sctx.strokeStyle = "#2a3348"; sctx.lineWidth = 1 * dpr;
+    sctx.beginPath(); sctx.moveTo(0, h / 2); sctx.lineTo(w, h / 2); sctx.stroke();
+    if (drift.length < 2) return;
+    const maxAbs = Math.max(1e-4, ...drift.map(d => Math.abs(d.v)));
+    const tmax = Math.max(drift[drift.length - 1].t, 1);
+    sctx.strokeStyle = integ === "kdk" ? "#5aa0f0" : "#f08a5a"; sctx.lineWidth = 2 * dpr;
+    sctx.beginPath();
+    drift.forEach((d, k) => { const px = d.t / tmax * (w - 2 * dpr) + dpr, py = h / 2 - d.v / maxAbs * (h / 2 - 3 * dpr);
+      k ? sctx.lineTo(px, py) : sctx.moveTo(px, py); });
+    sctx.stroke();
+  }
+
+  // ─── Loop ──────────────────────────────────────────────────────────────────
+  const hud = document.getElementById("hud"), driftEl = document.getElementById("drift"), perfEl = document.getElementById("perf");
+  let running = !window.matchMedia("(prefers-reduced-motion: reduce)").matches, frame = 0, accMs = 0, accSteps = 0;
+  function tick() {
+    if (running) {
+      const t0 = performance.now();
+      const per = N <= 1024 ? 3 : 1;
+      for (let s = 0; s < per; s++) step();
+      accMs += performance.now() - t0; accSteps += per;
+      if (++frame % 15 === 0) {
+        const d = (energy() - E0) / Math.abs(E0);
+        drift.push({ t, v: d }); if (drift.length > 400) drift.shift();
+        driftEl.textContent = (d >= 0 ? "+" : "−") + Math.abs(d * 100).toFixed(3) + " %";
+        perfEl.textContent = (N * N * accSteps / (accMs / 1000) / 1e6).toFixed(0) + " M interactions/s in JS";
+        accMs = 0; accSteps = 0; drawSpark();
+      }
+      hud.textContent = "t = " + t.toFixed(2) + " · " + steps + " steps · " + (t / (2 * Math.PI)).toFixed(2) + " outer orbits";
+    }
+    if (running || dragging) draw();
+    requestAnimationFrame(tick);
+  }
+
+  // ─── Controls ──────────────────────────────────────────────────────────────
+  function press(group, btn) { group.forEach(b => b.setAttribute("aria-pressed", String(b === btn))); }
+  const intBtns = [document.getElementById("int-kdk"), document.getElementById("int-euler")];
+  intBtns.forEach(b => b.addEventListener("click", () => { integ = b.id === "int-kdk" ? "kdk" : "euler"; press(intBtns, b); init(); draw(); drawSpark(); }));
+  const dtBtns = [...document.querySelectorAll("[data-dt]")];
+  dtBtns.forEach(b => b.addEventListener("click", () => { dt = +b.dataset.dt; press(dtBtns, b); init(); draw(); drawSpark(); }));
+  const nBtns = [...document.querySelectorAll("[data-n]")];
+  nBtns.forEach(b => b.addEventListener("click", () => { N = +b.dataset.n; press(nBtns, b); init(); draw(); drawSpark(); }));
+  const pauseBtn = document.getElementById("pause");
+  const syncPause = () => { pauseBtn.textContent = running ? "Pause" : "Play"; };
+  pauseBtn.addEventListener("click", () => { running = !running; syncPause(); });
+  document.getElementById("reset").addEventListener("click", () => { init(); draw(); drawSpark(); driftEl.textContent = "+0.000 %"; });
+  sky.addEventListener("pointerdown", e => { dragging = true; lx = e.clientX; ly = e.clientY; sky.setPointerCapture(e.pointerId); });
+  sky.addEventListener("pointermove", e => { if (!dragging) return;
+    yaw += (e.clientX - lx) * 0.008; tilt = Math.max(0, Math.min(1.5, tilt + (e.clientY - ly) * 0.006));
+    lx = e.clientX; ly = e.clientY; if (!running) draw(); });
+  sky.addEventListener("pointerup", () => { dragging = false; });
+
+  init(); syncPause();
+  new ResizeObserver(resize).observe(sky);
+  resize(); requestAnimationFrame(tick);
+
+  // ─── Charts (log-log, drawn from the measured CSVs) ─────────────────────────
+  const NS = [1024, 4096, 16384, 65536];
+  const scaling = { serial: [0.499, 4.547, 76.42, 1446.5], omp: [0.149, 1.765, 29.71, 380.4] };
+  const BN = [256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536, 131072];
+  const bh = {
+    serial: [0.027, 0.082, 0.261, 1.337, 5.928, 21.87, 78.63, 337.3, 1212.4, 7753.0],
+    bh1:    [0.177, 0.491, 1.551, 4.025, 10.53, 31.29, 81.37, 203.0, 695.3, 1851.6],
+    omp:    [0.015, 0.035, 0.109, 0.436, 2.356, 6.660, 24.64, 85.05, 374.6, 2006.4],
+    bhomp:  [0.070, 0.191, 0.482, 1.339, 3.391, 8.162, 21.91, 55.42, 169.0, 527.8],
+  };
+  const tip = document.getElementById("tip");
+  const fmtN = n => n >= 1024 ? (n / 1024) + "K" : String(n);
+  const fmtMs = v => v < 1 ? v.toFixed(3) : v < 100 ? v.toFixed(1) : Math.round(v).toLocaleString();
+  function chart(svg, xs, series) {
+    const NSV = "http://www.w3.org/2000/svg", L = 52, Rr = 12, T = 10, B = 34, Wc = 420, Hc = 260;
+    const all = series.flatMap(s => s.data);
+    const y0 = Math.floor(Math.log10(Math.min(...all))), y1 = Math.ceil(Math.log10(Math.max(...all)));
+    const lx0 = Math.log2(xs[0]), lx1 = Math.log2(xs[xs.length - 1]);
+    const X = n => L + (Math.log2(n) - lx0) / (lx1 - lx0) * (Wc - L - Rr);
+    const Y = v => T + (y1 - Math.log10(v)) / (y1 - y0) * (Hc - T - B);
+    const el = (tag, at, txt) => { const e = document.createElementNS(NSV, tag); for (const k in at) e.setAttribute(k, at[k]); if (txt) e.textContent = txt; svg.appendChild(e); return e; };
+    for (let p = y0; p <= y1; p++) {
+      el("line", { x1: L, x2: Wc - Rr, y1: Y(10 ** p), y2: Y(10 ** p), stroke: "var(--rule)", "stroke-width": 1 });
+      el("text", { x: L - 8, y: Y(10 ** p) + 4, "text-anchor": "end", "font-size": 11, fill: "var(--ink-3)", "font-family": "var(--f-mono)" }, p >= 0 ? String(10 ** p) : (10 ** p).toFixed(-p));
+    }
+    const step = xs.length > 6 ? 2 : 1;
+    xs.forEach((n, i) => { if (i % step) return;
+      el("text", { x: X(n), y: Hc - 12, "text-anchor": "middle", "font-size": 11, fill: "var(--ink-3)", "font-family": "var(--f-mono)" }, fmtN(n)); });
+    el("text", { x: (L + Wc - Rr) / 2, y: Hc + 4, "text-anchor": "middle", "font-size": 11, fill: "var(--ink-2)" }, "bodies N");
+    for (const s of series) {
+      el("polyline", { points: s.data.map((v, i) => X(xs[i]) + "," + Y(v)).join(" "), fill: "none", stroke: s.color, "stroke-width": 2, "stroke-dasharray": s.dash ? "6 4" : "none", "stroke-linejoin": "round" });
+      s.data.forEach((v, i) => {
+        el("circle", { cx: X(xs[i]), cy: Y(v), r: 4, fill: s.color, stroke: "var(--surface)", "stroke-width": 2 });
+        const hit = el("circle", { cx: X(xs[i]), cy: Y(v), r: 11, fill: "transparent" });
+        hit.addEventListener("pointerenter", e => { tip.hidden = false; tip.textContent = s.name + " · N=" + xs[i].toLocaleString() + " · " + fmtMs(v) + " ms"; });
+        hit.addEventListener("pointermove", e => { tip.style.left = (e.clientX + 12) + "px"; tip.style.top = (e.clientY - 30) + "px"; });
+        hit.addEventListener("pointerleave", () => { tip.hidden = true; });
+      });
+    }
+  }
+  chart(document.getElementById("c-scaling"), NS, [
+    { name: "1 thread", data: scaling.serial, color: "var(--s1)" },
+    { name: "OpenMP", data: scaling.omp, color: "var(--s2)" },
+  ]);
+  chart(document.getElementById("c-bh"), BN, [
+    { name: "direct, 1 thread", data: bh.serial, color: "var(--s1)" },
+    { name: "Barnes–Hut, 1 thread", data: bh.bh1, color: "var(--s1)", dash: true },
+    { name: "direct, OpenMP", data: bh.omp, color: "var(--s2)" },
+    { name: "Barnes–Hut, OpenMP", data: bh.bhomp, color: "var(--s2)", dash: true },
+  ]);
+})();
+</script>
+</body>
+</html>

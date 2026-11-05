@@ -1,5 +1,7 @@
 # Parallel N-Body Simulation (CUDA + C++/OpenMP)
 
+**Live demo:** https://colmeabhi.github.io/parallelized-nbody-simulation-cuda-cpp/ (the galaxy running in your browser, plus the results)
+
 [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/colmeabhi/parallelized-nbody-simulation-cuda-cpp/blob/main/notebooks/colab_gpu_benchmarks.ipynb)
 
 GPU-accelerated N-body gravitational simulation of a Milky Way-like galaxy,
@@ -39,6 +41,7 @@ timings and energy figures compare like with like.
 │   ├── profile_ncu.sh                  Nsight Compute naive vs tiled → results/ncu_metrics.csv
 │   └── make_report.py                  results/*.csv → charts + the section below
 ├── notebooks/colab_gpu_benchmarks.ipynb  run it all on a free Colab GPU
+├── docs/index.html                 GitHub Pages showcase (live JS simulation + results)
 └── results/                            measured data and charts
 ```
 
