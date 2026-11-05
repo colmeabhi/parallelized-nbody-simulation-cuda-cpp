@@ -207,9 +207,10 @@ def chart_energy(plt):
     axes = axes if len(dts) > 1 else [axes]
     for ax, dt in zip(axes, dts):
         for integ in ("kdk", "euler"):
-            rows = [r for r in energy_cpu if r["integrator"] == integ and float(r["dt"]) == dt]
+            rows = [r for r in energy_cpu if r["integrator"] == integ
+                    and float(r["dt"]) == dt and float(r["time"]) > 0]  # ΔE(0) = 0
             t = [float(r["time"]) for r in rows]
-            d = [max(abs(float(r["rel_drift"])), 1e-9) for r in rows]
+            d = [max(abs(float(r["rel_drift"])), 1e-12) for r in rows]
             ax.plot(t, d, color=COLORS[integ],
                     label="KDK leapfrog" if integ == "kdk" else "semi-implicit Euler")
         ax.set_yscale("log")
@@ -346,7 +347,7 @@ def energy_table():
             mx = max(abs(float(r["rel_drift"])) for r in rs)
             rows.append(["KDK leapfrog" if integ == "kdk" else "semi-implicit Euler",
                          f"{dt:g}", rs[-1]["step"], f"{final:+.2e}", f"{mx:.2e}"])
-    return table(["integrator", "dt", "steps", "final ΔE/E₀", "max |ΔE/E₀|"], rows,
+    return table(["integrator", "dt", "steps", "final ΔE/E₀", "max abs(ΔE/E₀)"], rows,
                  ["---", "--:", "--:", "--:", "--:"])
 
 
@@ -438,9 +439,9 @@ def main():
     with open(os.path.join(RES, "RESULTS.md"), "w") as f:
         f.write("# Benchmark results\n\n" + section.replace("](results/", "](") + "\n")
     text = open(README).read()
-    pat = re.compile(r"(<!-- RESULTS:BEGIN -->\n).*?(\n<!-- RESULTS:END -->)", re.S)
+    pat = re.compile(r"(<!-- RESULTS:BEGIN -->\n).*?(<!-- RESULTS:END -->)", re.S)
     if pat.search(text):
-        text = pat.sub(lambda m: m.group(1) + section + m.group(2), text)
+        text = pat.sub(lambda m: m.group(1) + section + "\n" + m.group(2), text)
         open(README, "w").write(text)
         print("Updated README.md results section")
     else:
