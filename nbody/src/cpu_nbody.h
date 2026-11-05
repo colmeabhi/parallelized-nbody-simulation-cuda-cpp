@@ -6,7 +6,6 @@
 #include "common.h"
 
 enum class CpuMethod  { Serial, OpenMP, BarnesHut };
-enum class Integrator { KDK, Euler };
 
 CpuMethod   parse_cpu_method(const std::string& s);   // "serial" | "omp" | "bh"
 Integrator  parse_integrator(const std::string& s);   // "kdk" | "euler"

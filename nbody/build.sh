@@ -24,16 +24,21 @@ fi
 
 # ── Compile ───────────────────────────────────────────────────────────────────
 echo "Compiling for architecture: $ARCH"
+mkdir -p build
+NVFLAGS="-O3 --use_fast_math -lineinfo -std=c++17 -arch=$ARCH -I src"
+HOSTFLAGS="-O3 -ffast-math -march=native -fopenmp"
 
-nvcc -O3 --use_fast_math -std=c++14 \
-     -arch="$ARCH"                  \
-     -I src                         \
-     src/main.cu                    \
-     src/galaxy_simulation.cu       \
-     src/nbody_kernel.cu            \
-     -o galaxy_nbody
+# CPU sources (shared by every binary) — compiled by the host compiler.
+g++ -std=c++17 $HOSTFLAGS -c src/galaxy_ics.cpp -o build/galaxy_ics.o
+g++ -std=c++17 $HOSTFLAGS -c src/cpu_nbody.cpp  -o build/cpu_nbody.o
+CPU_OBJS="build/galaxy_ics.o build/cpu_nbody.o"
 
+g++ -std=c++17 -O3 -fopenmp -I src src/bench_cpu.cpp $CPU_OBJS -o nbody_bench_cpu
+
+nvcc $NVFLAGS -Xcompiler -fopenmp src/main.cu src/galaxy_simulation.cu \
+     src/nbody_kernel.cu $CPU_OBJS -o galaxy_nbody
 echo ""
-echo "Build successful → ./galaxy_nbody"
-echo "Run  → ./galaxy_nbody [n_bodies] [n_steps]"
-echo "Plot → python3 visualize.py simulation.bin [out.gif]"
+echo "Build successful → ./galaxy_nbody  ./nbody_bench_cpu"
+echo "Run   → ./galaxy_nbody [n_bodies] [n_steps] [--integrator kdk|euler]"
+echo "Bench → ../scripts/run_benchmarks.sh"
+echo "Plot  → python3 visualize.py simulation.bin [out.gif]"

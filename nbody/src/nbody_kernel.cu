@@ -1,154 +1,261 @@
-// nbody_kernel.cu  —  Core CUDA N-body force calculation and integration.
+// nbody_kernel.cu  —  CUDA direct-summation N-body solver.
 //
-// Algorithm: O(N²) direct summation using shared-memory tiling.
+// Force:  a_i = Σ_j m_j (r_j − r_i) / (|r_j − r_i|² + ε²)^{3/2}     (G = 1)
 //
-// Each block loads BLOCK_SIZE body positions into shared memory (one "tile"),
-// then every thread accumulates the gravitational force from every body in
-// that tile before moving to the next tile.  This way each global-memory
-// position is read once per tile instead of once per body → BLOCK_SIZE-fold
-// reduction in global memory traffic.
+// Two force kernels are provided so their performance can be compared:
+//   accel_naive_kernel : each thread reads all N positions from global memory
+//                        (relies on L1/L2 caches for reuse).
+//   accel_tiled_kernel : each block stages blockDim.x positions at a time in
+//                        shared memory; every global load is reused by all
+//                        blockDim.x threads of the block.
 //
-// Integration: leapfrog (Kick-Drift)
-//   v(t+dt) = v(t) + a(t)*dt
-//   x(t+dt) = x(t) + v(t+dt)*dt
+// Integration: kick-drift-kick leapfrog, split across two kernels so that no
+// kernel reads positions that the same kernel writes (see nbody_kernel.cuh).
 //
-// Units: G = 1 (gravitational constant absorbed into masses).
-
+//   step n → n+1:
+//     kick_drift_kernel     v += a(x_n)·dt/2 ;  x += v·dt
+//     accel_*_kernel<KICK>  a = a(x_{n+1})   ;  v += a·dt/2
 #include "nbody_kernel.cuh"
 #include <cstdio>
 #include <cstdlib>
+#include <stdexcept>
+#include <vector>
 
-// ─── Error-checking helper ───────────────────────────────────────────────────
-// IMPORTANT: capture `err` in a local variable so the expression is evaluated
-// exactly once.  Writing CUDA_CHECK(cudaGetLastError()) without this would call
-// cudaGetLastError() a second time inside the macro (already cleared → "no error").
+// Capture `err` once so CUDA_CHECK(cudaGetLastError()) is not evaluated twice.
 #define CUDA_CHECK(err)                                                    \
     do {                                                                   \
         cudaError_t _e = (err);                                            \
         if (_e != cudaSuccess) {                                           \
-            fprintf(stderr, "CUDA error at %s:%d — %s\n",                 \
-                    __FILE__, __LINE__, cudaGetErrorString(_e));            \
+            fprintf(stderr, "CUDA error at %s:%d — %s\n",                  \
+                    __FILE__, __LINE__, cudaGetErrorString(_e));           \
             exit(EXIT_FAILURE);                                            \
         }                                                                  \
     } while (0)
 
-// ─── Device helper: gravitational acceleration from body j onto body i ───────
-//
-//   a_ij = G * m_j * (r_j - r_i) / |r_j - r_i|^3        (G = 1)
-//
-// soft2 = ε² is added to |r|² to prevent the singularity at r = 0.
-// For a self-interaction (i == j) the displacement is (0,0,0), so a = 0. ✓
-// For padded bodies (mass == 0) the result is 0. ✓
-// ────────────────────────────────────────────────────────────────────────────
-__device__ inline float3 body_body_accel(float4 pi, float4 pj, float soft2)
+GpuKernel parse_gpu_kernel(const std::string& s) {
+    if (s == "naive") return GpuKernel::Naive;
+    if (s == "tiled") return GpuKernel::Tiled;
+    throw std::invalid_argument("unknown GPU kernel '" + s + "' (naive|tiled)");
+}
+const char* to_string(GpuKernel k) {
+    return k == GpuKernel::Naive ? "gpu_naive" : "gpu_tiled";
+}
+
+// ─── Device helper: acceleration contribution of body j on body i ───────────
+// Self-interaction: displacement is 0 → contribution is exactly 0.
+// Padding bodies (mass 0) contribute 0.
+__device__ __forceinline__ void accumulate(float3& acc, float4 pi, float4 pj,
+                                           float soft2)
 {
     float dx = pj.x - pi.x;
     float dy = pj.y - pi.y;
     float dz = pj.z - pi.z;
-
-    float r2     = dx*dx + dy*dy + dz*dz + soft2;
-    float inv_r  = rsqrtf(r2);                    // 1 / sqrt(r² + ε²)
-    float scale  = pj.w * inv_r * inv_r * inv_r;  // m_j / |r|³
-
-    return { dx * scale, dy * scale, dz * scale };
+    float r2    = dx * dx + dy * dy + dz * dz + soft2;
+    float inv_r = rsqrtf(r2);
+    float s     = pj.w * inv_r * inv_r * inv_r;
+    acc.x += dx * s;
+    acc.y += dy * s;
+    acc.z += dz * s;
 }
 
-// ─── Main kernel ─────────────────────────────────────────────────────────────
-//
-// One thread handles one body (index i).
-// Shared memory 'tile' holds BLOCK_SIZE positions for the current tile.
-//
-// Loop over tiles:
-//   1. Cooperatively load tile into shared memory  (1 global load per thread)
-//   2. Compute forces from every body in the tile  (reads from L1/shared mem)
-//   3. Advance to next tile
-//
-// After accumulating all forces, apply leapfrog integration.
-// ────────────────────────────────────────────────────────────────────────────
-__global__ void nbody_step_kernel(
-    float4* __restrict__ pos,   // in/out: body positions  (x, y, z, mass)
-    float4* __restrict__ vel,   // in/out: body velocities (vx, vy, vz, 0)
-    int   n,                    // total number of bodies
-    float dt,                   // timestep
-    float soft2)                // softening squared (ε²)
+// Store a_i, and optionally finish the leapfrog step with the second half-kick.
+template <bool KICK>
+__device__ __forceinline__ void store_result(int i, float3 a,
+                                             float4* __restrict__ acc,
+                                             float4* __restrict__ vel,
+                                             float kick_dt)
 {
-    // Dynamic shared memory: one tile of positions.
-    extern __shared__ float4 tile[];
+    acc[i] = make_float4(a.x, a.y, a.z, 0.f);
+    if (KICK) {
+        float4 v = vel[i];
+        v.x += a.x * kick_dt;
+        v.y += a.y * kick_dt;
+        v.z += a.z * kick_dt;
+        vel[i] = v;
+    }
+}
 
+// ─── Naive force kernel ─────────────────────────────────────────────────────
+template <bool KICK>
+__global__ void accel_naive_kernel(const float4* __restrict__ pos,
+                                   float4* __restrict__ acc,
+                                   float4* __restrict__ vel,
+                                   int n, float soft2, float kick_dt)
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= n) return;
+    float4 pi = pos[i];
+    float3 a  = make_float3(0.f, 0.f, 0.f);
+    #pragma unroll 4
+    for (int j = 0; j < n; j++)
+        accumulate(a, pi, pos[j], soft2);
+    store_result<KICK>(i, a, acc, vel, kick_dt);
+}
+
+// ─── Tiled (shared-memory) force kernel ─────────────────────────────────────
+// Dynamic shared memory: blockDim.x float4 = one tile of positions.
+template <bool KICK>
+__global__ void accel_tiled_kernel(const float4* __restrict__ pos,
+                                   float4* __restrict__ acc,
+                                   float4* __restrict__ vel,
+                                   int n, float soft2, float kick_dt)
+{
+    extern __shared__ float4 tile[];
     int i = blockIdx.x * blockDim.x + threadIdx.x;
 
-    // Load this body's position (or a zero dummy if i ≥ n).
-    float4 pi  = (i < n) ? pos[i] : make_float4(0.f, 0.f, 0.f, 0.f);
-    float3 acc = { 0.f, 0.f, 0.f };
+    // Threads with i ≥ n still help load tiles and hit every __syncthreads.
+    float4 pi = (i < n) ? pos[i] : make_float4(0.f, 0.f, 0.f, 0.f);
+    float3 a  = make_float3(0.f, 0.f, 0.f);
 
-    int n_tiles = (n + blockDim.x - 1) / blockDim.x;
-
-    for (int t = 0; t < n_tiles; t++) {
-        // ── Step 1: load tile ──────────────────────────────────────────────
-        // Each thread loads body  j = t*BLOCK_SIZE + threadIdx.x  (or zero).
-        int j = t * blockDim.x + threadIdx.x;
+    for (int base = 0; base < n; base += blockDim.x) {
+        int j = base + threadIdx.x;
         tile[threadIdx.x] = (j < n) ? pos[j] : make_float4(0.f, 0.f, 0.f, 0.f);
-        __syncthreads();  // wait for all threads to finish loading
+        __syncthreads();                       // tile fully loaded
 
-        // ── Step 2: accumulate forces from this tile ───────────────────────
-        // #pragma unroll 4 tells the compiler to unroll 4 iterations at a time,
-        // improving instruction-level parallelism with minimal register cost.
-        #pragma unroll 4
-        for (int k = 0; k < blockDim.x; k++) {
-            float3 a = body_body_accel(pi, tile[k], soft2);
-            acc.x += a.x;
-            acc.y += a.y;
-            acc.z += a.z;
+        #pragma unroll 8
+        for (int k = 0; k < blockDim.x; k++)
+            accumulate(a, pi, tile[k], soft2);
+        __syncthreads();                       // tile fully consumed
+    }
+    if (i < n) store_result<KICK>(i, a, acc, vel, kick_dt);
+}
+
+// ─── Integration kernel: v += a·kick_dt ; x += v·drift_dt ───────────────────
+// Each thread reads and writes only body i → no cross-thread hazard.
+__global__ void kick_drift_kernel(float4* __restrict__ pos,
+                                  float4* __restrict__ vel,
+                                  const float4* __restrict__ acc,
+                                  int n, float kick_dt, float drift_dt)
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= n) return;
+    float4 a = acc[i], v = vel[i], p = pos[i];
+    v.x += a.x * kick_dt;  v.y += a.y * kick_dt;  v.z += a.z * kick_dt;
+    p.x += v.x * drift_dt; p.y += v.y * drift_dt; p.z += v.z * drift_dt;
+    vel[i] = v;
+    pos[i] = p;
+}
+
+// ─── Potential kernel (energy diagnostics, double precision) ────────────────
+// phi_i = −Σ_{j≠i} m_j / sqrt(r_ij² + ε²).  Here j ≠ i *is* required: the
+// softened self-term would be −m_i/ε, not 0.
+__global__ void potential_kernel(const float4* __restrict__ pos,
+                                 double* __restrict__ phi, int n, float soft2)
+{
+    extern __shared__ float4 tile[];
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    float4 pi = (i < n) ? pos[i] : make_float4(0.f, 0.f, 0.f, 0.f);
+    double sum = 0.0;
+    for (int base = 0; base < n; base += blockDim.x) {
+        int j = base + threadIdx.x;
+        tile[threadIdx.x] = (j < n) ? pos[j] : make_float4(0.f, 0.f, 0.f, 0.f);
+        __syncthreads();
+        int kmax = min((int)blockDim.x, n - base);
+        for (int k = 0; k < kmax; k++) {
+            if (base + k == i) continue;
+            double dx = (double)tile[k].x - pi.x;
+            double dy = (double)tile[k].y - pi.y;
+            double dz = (double)tile[k].z - pi.z;
+            sum -= tile[k].w / sqrt(dx * dx + dy * dy + dz * dz + (double)soft2);
         }
-        __syncthreads();  // ensure tile is fully consumed before next load
+        __syncthreads();
     }
-
-    // ── Leapfrog (Kick-Drift) integration ────────────────────────────────
-    // Kick: v  += a * dt
-    // Drift: x += v * dt
-    if (i < n) {
-        float4 v  = vel[i];
-        v.x += acc.x * dt;
-        v.y += acc.y * dt;
-        v.z += acc.z * dt;
-        vel[i]   = v;
-
-        pos[i].x += v.x * dt;
-        pos[i].y += v.y * dt;
-        pos[i].z += v.z * dt;
-    }
+    if (i < n) phi[i] = sum;
 }
 
 // ─── NBodyGPU host-side implementation ───────────────────────────────────────
 
 void NBodyGPU::allocate(int n) {
+    free();
     n_ = n;
     CUDA_CHECK(cudaMalloc(&d_pos, n * sizeof(float4)));
     CUDA_CHECK(cudaMalloc(&d_vel, n * sizeof(float4)));
+    CUDA_CHECK(cudaMalloc(&d_acc, n * sizeof(float4)));
+    CUDA_CHECK(cudaMalloc(&d_phi, n * sizeof(double)));
+    acc_valid_ = false;
 }
 
-void NBodyGPU::upload(const float4* pos, const float4* vel) {
+void NBodyGPU::upload(const vec4* pos, const vec4* vel) {
     CUDA_CHECK(cudaMemcpy(d_pos, pos, n_ * sizeof(float4), cudaMemcpyHostToDevice));
     CUDA_CHECK(cudaMemcpy(d_vel, vel, n_ * sizeof(float4), cudaMemcpyHostToDevice));
+    acc_valid_ = false;
 }
 
-void NBodyGPU::download(float4* pos, float4* vel) const {
+void NBodyGPU::download(vec4* pos, vec4* vel) const {
     CUDA_CHECK(cudaMemcpy(pos, d_pos, n_ * sizeof(float4), cudaMemcpyDeviceToHost));
-    CUDA_CHECK(cudaMemcpy(vel, d_vel, n_ * sizeof(float4), cudaMemcpyDeviceToHost));
-}
-
-void NBodyGPU::step(float dt) {
-    int   blocks   = (n_ + BLOCK_SIZE - 1) / BLOCK_SIZE;
-    int   smem     = BLOCK_SIZE * sizeof(float4);  // shared memory per block
-    float soft2    = SOFTENING * SOFTENING;
-
-    nbody_step_kernel<<<blocks, BLOCK_SIZE, smem>>>(d_pos, d_vel, n_, dt, soft2);
-    CUDA_CHECK(cudaGetLastError());
-    // Note: kernel is async; download() or cudaDeviceSynchronize() will flush it.
+    if (vel)
+        CUDA_CHECK(cudaMemcpy(vel, d_vel, n_ * sizeof(float4), cudaMemcpyDeviceToHost));
 }
 
 void NBodyGPU::free() {
     if (d_pos) { cudaFree(d_pos); d_pos = nullptr; }
     if (d_vel) { cudaFree(d_vel); d_vel = nullptr; }
+    if (d_acc) { cudaFree(d_acc); d_acc = nullptr; }
+    if (d_phi) { cudaFree(d_phi); d_phi = nullptr; }
     n_ = 0;
+    acc_valid_ = false;
+}
+
+void NBodyGPU::set_block_size(int b) {
+    if (b < 32 || b > 1024 || b % 32 != 0)
+        throw std::invalid_argument("block size must be a multiple of 32 in [32, 1024]");
+    block_ = b;
+}
+
+void NBodyGPU::sync() const { CUDA_CHECK(cudaDeviceSynchronize()); }
+
+void NBodyGPU::launch_accel(float kick_dt) {
+    const int   blocks = (n_ + block_ - 1) / block_;
+    const float soft2  = kSoftening * kSoftening;
+    const bool  kick   = kick_dt != 0.f;
+
+    if (kernel_ == GpuKernel::Tiled) {
+        size_t smem = block_ * sizeof(float4);
+        if (kick) accel_tiled_kernel<true ><<<blocks, block_, smem>>>(d_pos, d_acc, d_vel, n_, soft2, kick_dt);
+        else      accel_tiled_kernel<false><<<blocks, block_, smem>>>(d_pos, d_acc, d_vel, n_, soft2, kick_dt);
+    } else {
+        if (kick) accel_naive_kernel<true ><<<blocks, block_>>>(d_pos, d_acc, d_vel, n_, soft2, kick_dt);
+        else      accel_naive_kernel<false><<<blocks, block_>>>(d_pos, d_acc, d_vel, n_, soft2, kick_dt);
+    }
+    CUDA_CHECK(cudaGetLastError());
+    acc_valid_ = true;
+}
+
+void NBodyGPU::compute_accel() { launch_accel(0.f); }
+
+void NBodyGPU::step_kdk(float dt) {
+    if (!acc_valid_) launch_accel(0.f);              // a(x_0), first step only
+    const int blocks = (n_ + block_ - 1) / block_;
+    kick_drift_kernel<<<blocks, block_>>>(d_pos, d_vel, d_acc, n_, 0.5f * dt, dt);
+    CUDA_CHECK(cudaGetLastError());
+    launch_accel(0.5f * dt);                         // a(x_{n+1}) + half-kick
+}
+
+void NBodyGPU::step_euler(float dt) {
+    launch_accel(0.f);                               // a(x_n)
+    const int blocks = (n_ + block_ - 1) / block_;
+    kick_drift_kernel<<<blocks, block_>>>(d_pos, d_vel, d_acc, n_, dt, dt);
+    CUDA_CHECK(cudaGetLastError());
+    acc_valid_ = false;                              // acc refers to old x
+}
+
+Energy NBodyGPU::energy() {
+    const int blocks = (n_ + block_ - 1) / block_;
+    potential_kernel<<<blocks, block_, block_ * sizeof(float4)>>>(
+        d_pos, d_phi, n_, kSoftening * kSoftening);
+    CUDA_CHECK(cudaGetLastError());
+
+    std::vector<double> phi(n_);
+    std::vector<vec4>   pos(n_), vel(n_);
+    CUDA_CHECK(cudaMemcpy(phi.data(), d_phi, n_ * sizeof(double), cudaMemcpyDeviceToHost));
+    download(pos.data(), vel.data());
+
+    Energy e;
+    for (int i = 0; i < n_; i++) {
+        double v2 = (double)vel[i].x * vel[i].x + (double)vel[i].y * vel[i].y
+                  + (double)vel[i].z * vel[i].z;
+        e.kinetic   += 0.5 * pos[i].w * v2;
+        e.potential += 0.5 * pos[i].w * phi[i];       // ½: each pair counted twice
+    }
+    return e;
 }

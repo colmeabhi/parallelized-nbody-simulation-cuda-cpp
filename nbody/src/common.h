@@ -32,6 +32,9 @@ constexpr float kSoftening = 0.02f;
 // so use it to compare implementations, not to compare against peak FLOP/s.
 constexpr double kFlopsPerInteraction = 20.0;
 
+// Time integrators: kick-drift-kick leapfrog, or semi-implicit Euler.
+enum class Integrator { KDK, Euler };
+
 // Total energy split into kinetic and potential parts (double precision).
 struct Energy {
     double kinetic   = 0.0;
