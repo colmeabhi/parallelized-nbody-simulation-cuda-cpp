@@ -1,0 +1,4 @@
+date: 2026-11-05T05:55:57Z
+cpu: Intel(R) Xeon(R) Processor @ 2.10GHz
+cpu_threads: 4
+cxx: c++ (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0

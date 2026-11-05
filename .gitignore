@@ -48,3 +48,9 @@ venv/
 # editor
 .vscode/
 .DS_Store
+
+# ── Benchmark binaries / profiler reports ────────────────────────────────────
+nbody_bench_cpu
+nbody_bench_gpu
+nbody/energy.csv
+*.ncu-rep
