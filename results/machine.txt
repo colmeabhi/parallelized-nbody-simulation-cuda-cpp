@@ -1,8 +1,4 @@
-date: 2026-11-13T06:16:11Z
-cpu: x86-64 (model name hidden by the Modal sandbox) [AVX2]
+date: 2026-11-14
+cpu: unknown
 cpu_threads: 8
-cxx: c++ (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0
-gpu: NVIDIA A100-SXM4-40GB, 8.0, 610.57.04
-nvcc: Build cuda_13.0.r13.0/compiler.36424714_0
-note: Modal container, 8 reserved cores (OMP_NUM_THREADS=8); host reports 24
-note: measured with the earlier, longer version of this code (commit 37d7f78), before it was simplified
+gpu: NVIDIA A100-SXM4-40GB

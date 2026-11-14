@@ -12,7 +12,8 @@ written four ways so they can be compared:
 | GPU, tiled | NVIDIA GPU (CUDA), using shared memory | `src/gpu_nbody.cu` |
 
 **Headline result:** with 65,536 stars on an A100, the tiled GPU version takes
-8 ms per step. One CPU thread takes 1.5 seconds. That is about 190x faster.
+8 ms per step. One CPU thread takes 8.1 seconds. That is about 1,000x faster,
+and 126x faster than 8 CPU threads.
 
 ---
 
@@ -133,13 +134,7 @@ How do we know a simulation is accurate? **Total energy should stay constant.**
 ## 5. Results
 
 Measured on an **NVIDIA A100 (40 GB)** and 8 CPU cores of the same cloud
-machine (Modal).
-
-> **Note:** these numbers were measured with the earlier, longer version of
-> this code (commit `37d7f78`), before it was simplified. The GPU force loops
-> are the same. The CPU loop was hand-tuned back then and is a plain loop now,
-> so a fresh run will show a slower CPU and larger GPU speedups. To refresh
-> everything, run `modal run bench/modal_bench.py`.
+machine (Modal), on 2026-11-14, with `modal run bench/modal_bench.py`.
 
 ### Time per step
 
@@ -147,42 +142,49 @@ machine (Modal).
 
 | N | version | ms per step | speedup | interactions / s | GFLOP/s |
 |---|---|--:|--:|--:|--:|
-| 1K | CPU, 1 thread | 0.377 | 1.0x | 2.8 billion | 56 |
-| 1K | CPU, OpenMP | 0.081 | 4.7x | 13.0 billion | 260 |
-| 1K | GPU, naive | 0.124 | 3.1x | 8.5 billion | 170 |
-| 1K | GPU, tiled | 0.056 | 6.7x | 18.7 billion | 374 |
-| 4K | CPU, 1 thread | 5.815 | 1.0x | 2.9 billion | 58 |
-| 4K | CPU, OpenMP | 0.826 | 7.0x | 20.3 billion | 406 |
-| 4K | GPU, naive | 0.489 | 11.9x | 34.3 billion | 687 |
-| 4K | GPU, tiled | 0.189 | 30.8x | 88.7 billion | 1,775 |
-| 16K | CPU, 1 thread | 92.381 | 1.0x | 2.9 billion | 58 |
-| 16K | CPU, OpenMP | 12.027 | 7.7x | 22.3 billion | 446 |
-| 16K | GPU, naive | 1.834 | 50.4x | 146.4 billion | 2,927 |
-| 16K | GPU, tiled | 0.741 | 124.7x | 362.2 billion | 7,245 |
-| 64K | CPU, 1 thread | 1493.349 | 1.0x | 2.9 billion | 58 |
-| 64K | CPU, OpenMP | 189.460 | 7.9x | 22.7 billion | 453 |
-| 64K | GPU, naive | 9.061 | 164.8x | 474.0 billion | 9,480 |
-| 64K | GPU, tiled | 7.973 | 187.3x | 538.7 billion | 10,774 |
+| 1K | CPU, 1 thread | 1.994 | 1.0x | 0.5 billion | 11 |
+| 1K | CPU, OpenMP | 0.276 | 7.2x | 3.8 billion | 76 |
+| 1K | GPU, naive | 0.122 | 16.3x | 8.6 billion | 171 |
+| 1K | GPU, tiled | 0.059 | 33.9x | 17.9 billion | 357 |
+| 4K | CPU, 1 thread | 31.665 | 1.0x | 0.5 billion | 11 |
+| 4K | CPU, OpenMP | 4.048 | 7.8x | 4.1 billion | 83 |
+| 4K | GPU, naive | 0.479 | 66.1x | 35.0 billion | 700 |
+| 4K | GPU, tiled | 0.198 | 159.9x | 84.7 billion | 1,694 |
+| 16K | CPU, 1 thread | 506.093 | 1.0x | 0.5 billion | 11 |
+| 16K | CPU, OpenMP | 64.155 | 7.9x | 4.2 billion | 84 |
+| 16K | GPU, naive | 1.802 | 280.8x | 149.0 billion | 2,979 |
+| 16K | GPU, tiled | 0.761 | 665.2x | 352.8 billion | 7,056 |
+| 64K | CPU, 1 thread | 8122.282 | 1.0x | 0.5 billion | 11 |
+| 64K | CPU, OpenMP | 1017.815 | 8.0x | 4.2 billion | 84 |
+| 64K | GPU, naive | 11.227 | 723.5x | 382.6 billion | 7,651 |
+| 64K | GPU, tiled | 8.061 | 1007.6x | 532.8 billion | 10,657 |
 
 Speedup is against one CPU thread at the same N. GFLOP/s counts each
 interaction as 20 floating point operations, which is the usual convention.
 
 What this shows:
 
-- **Small N: the GPU barely helps.** At 1K stars, starting a kernel costs
-  about as much as the work itself, and 8 CPU threads beat the naive kernel.
-- **Large N: the GPU wins by a lot.** At 64K the tiled kernel is 187x faster
-  than one CPU thread and 24x faster than 8 threads.
-- **Tiling helps most in the middle.** Tiled is 2.2x to 2.6x faster than
-  naive up to 16K, but only 1.14x at 64K.
+- **The GPU wins at every size, but by less at small N.** At 1K stars,
+  starting a kernel costs about as much as the work itself: the naive kernel
+  is only 2.3x faster than 8 CPU threads, and the tiled one 4.7x.
+- **Large N: the GPU wins by a lot.** At 64K the tiled kernel is about 1,000x
+  faster than one CPU thread and 126x faster than 8 threads.
+- **The CPU is a plain loop.** One thread manages about 0.5 billion
+  interactions per second (11 GFLOP/s). A hand-vectorised loop would be
+  several times faster, so the speedups above are against simple C++, not
+  against the best a CPU can do. OpenMP scales almost perfectly (8.0x on 8
+  threads at 64K).
+- **Tiling helps most in the middle.** Tiled is 2.1x to 2.4x faster than
+  naive up to 16K, but only 1.4x at 64K.
 
 ### Block size
 
 ![GFLOP/s vs block size](results/block_sweep.png)
 
 The block size is the number of threads per block, and for the tiled kernel
-it is also the tile size. **128 is best or close to best at most sizes.** 512
-is always the slowest choice for the tiled kernel, up to 2.3x slower.
+it is also the tile size. **128 is best for the tiled kernel at 1K, 4K and
+64K, and 256 at 16K.** 512 is always the slowest choice for the tiled kernel,
+up to 2.1x slower. The naive kernel prefers small blocks (64 or 128).
 
 ### Why is tiled faster? (Nsight Compute)
 
@@ -190,16 +192,16 @@ One force calculation, profiled with NVIDIA's profiler:
 
 | | naive, 16K | tiled, 16K | naive, 64K | tiled, 64K |
 |---|--:|--:|--:|--:|
-| Bytes loaded from global memory | 269 MB | 17 MB | 4.30 GB | 0.27 GB |
+| Bytes loaded from global memory | 1.07 GB | 68 MB | 17.2 GB | 1.08 GB |
 | Shared memory accesses | ~0 | 17 million | ~0 | 271 million |
-| Compute units busy (% of peak) | 19% | 49% | 63% | 72% |
+| Compute units busy (% of peak) | 25% | 48% | 55% | 71% |
 | Occupancy possible | 100% | 100% | 100% | 100% |
-| Occupancy achieved | 12.5% | 12.5% | 28.8% | 23.5% |
+| Occupancy achieved | 12.5% | 12.5% | 26.7% | 23.2% |
 
 Tiling cuts global memory loads by **16x** and replaces them with shared
 memory accesses. With less waiting on memory, the compute units are busier
-(19% to 49% at 16K). At 64K the naive kernel is already at 63%, so there is
-less left to gain, which matches the small 1.14x speedup above.
+(25% to 48% at 16K). At 64K the naive kernel is already at 55%, so there is
+less left to gain, which matches the smaller 1.4x speedup above.
 
 ### Energy conservation
 
@@ -209,12 +211,12 @@ Largest energy error during a run of 1,024 stars for 20 time units:
 
 | time step dt | KDK | Euler |
 |--:|--:|--:|
-| 0.01 | 6.1% | 9.1% |
-| 0.005 | 0.089% | 0.73% |
-| 0.0025 | 0.026% | 0.26% |
+| 0.01 | 8.3% | 6.9% |
+| 0.005 | 0.13% | 0.64% |
+| 0.0025 | 0.029% | 0.22% |
 
-- **KDK is about 10x more accurate than Euler** once the time step is small
-  enough.
+- **KDK is 5x to 8x more accurate than Euler** once the time step is small
+  enough. At dt = 0.01 neither is accurate, and KDK happens to end up worse.
 - **The default dt = 0.01 is too big for accurate work.** Stars that pass
   close to the black hole move too far in one step. Use
   `./build/galaxy_nbody 4096 20000 kdk 0.0025` when accuracy matters.
